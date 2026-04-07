@@ -40,8 +40,10 @@ def parse_args():
                         help="Gradient penalty weight (lambda)")
     parser.add_argument("--lr", type=float, default=1e-4,
                         help="Learning rate for RMSprop optimisers")
-    parser.add_argument("--save-every", type=int, default=10,
+    parser.add_argument("--save-every", type=int, default=50,
                         help="Save checkpoint and examples every N epochs")
+    parser.add_argument("--monitor-every", type=int, default=1,
+                        help="Save a monitor plot every N epochs (0 to disable)")
     parser.add_argument("--device", type=str, default=None,
                         help="Device to use (auto-detected if not set)")
     return parser.parse_args()
@@ -110,6 +112,7 @@ def main():
         epochs=args.epochs,
         batch_size=args.batch_size,
         save_every=args.save_every,
+        monitor_every=args.monitor_every,
         output_dir=output_dir,
         variant=args.variant,
         noise_dim=args.noise_dim,

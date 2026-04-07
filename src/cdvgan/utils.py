@@ -60,9 +60,9 @@ class GlitchDataset(Dataset):
 # Training loop
 # ---------------------------------------------------------------------------
 
-def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=10,
-              output_dir="GAN_outputs", variant="cDVGAN", noise_dim=100,
-              num_classes=7):
+def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=50,
+              monitor_every=1, output_dir="GAN_outputs", variant="cDVGAN",
+              noise_dim=100, num_classes=7):
     """Train a GAN model.
 
     Parameters
@@ -73,7 +73,9 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=10,
     epochs : int
     batch_size : int
     save_every : int
-        Save checkpoint and example plots every N epochs.
+        Save full checkpoint and multi-sample example plots every N epochs.
+    monitor_every : int
+        Save a single vertex-sample monitor plot every N epochs (default 1).
     output_dir : str
         Directory to save checkpoints, loss history and example plots.
     variant : str
@@ -117,6 +119,10 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=10,
 
         loss_str = "  ".join(f"{k}: {v:.4f}" for k, v in mean_losses.items())
         print(f"Epoch {epoch}/{epochs}  {loss_str}")
+
+        if monitor_every > 0 and (epoch % monitor_every == 0 or epoch == epochs):
+            _monitor_epoch(gan, noise_dim, num_classes, output_dir, epoch,
+                           device=gan.device)
 
         if epoch % save_every == 0 or epoch == epochs:
             save_checkpoint(gan, variant, output_dir, epoch)
@@ -230,6 +236,24 @@ def _save_examples(gan, variant, noise_dim, num_classes, output_dir, epoch, devi
         )
         path = os.path.join(output_dir, f"{sampling}_examples_epoch{epoch}.png")
         _plot_examples(signals, classes, path)
+
+
+def _monitor_epoch(gan, noise_dim, num_classes, output_dir, epoch, device):
+    """Generate one random vertex sample and save a monitor plot."""
+    monitor_dir = os.path.join(output_dir, "monitor")
+    os.makedirs(monitor_dir, exist_ok=True)
+    signals, classes = generate_examples(
+        gan, noise_dim=noise_dim, num_classes=num_classes,
+        num_signals=1, sampling="vertex", device=device,
+    )
+    class_idx = int(np.argmax(classes[0]))
+    fig, ax = plt.subplots(figsize=(8, 3))
+    ax.plot(signals[0])
+    ax.set_title(f"Epoch {epoch} — class {class_idx}")
+    ax.set_xlabel("Sample")
+    plt.tight_layout()
+    plt.savefig(os.path.join(monitor_dir, f"epoch_{epoch:04d}.png"))
+    plt.close(fig)
 
 
 def _plot_examples(signals, classes, path, n=9):
