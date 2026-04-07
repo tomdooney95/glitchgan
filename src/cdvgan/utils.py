@@ -152,36 +152,58 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=25,
 # ---------------------------------------------------------------------------
 
 def save_checkpoint(gan, variant, output_dir, epoch="last"):
-    """Save model state dicts to output_dir."""
+    """Save model and optimizer state dicts to output_dir."""
     os.makedirs(output_dir, exist_ok=True)
+
     torch.save(gan.generator.state_dict(),
                os.path.join(output_dir, f"generator_{epoch}.pt"))
+    torch.save(gan.g_opt.state_dict(),
+               os.path.join(output_dir, f"g_opt_{epoch}.pt"))
+
     torch.save(gan.discriminator.state_dict(),
                os.path.join(output_dir, f"discriminator_{epoch}.pt"))
+    torch.save(gan.d_opt.state_dict(),
+               os.path.join(output_dir, f"d_opt_{epoch}.pt"))
+
     if hasattr(gan, "deriv_discriminator"):
         torch.save(gan.deriv_discriminator.state_dict(),
                    os.path.join(output_dir, f"deriv_discriminator_{epoch}.pt"))
+        torch.save(gan.d2d_opt.state_dict(),
+                   os.path.join(output_dir, f"d2d_opt_{epoch}.pt"))
+
     if hasattr(gan, "deriv2_discriminator"):
         torch.save(gan.deriv2_discriminator.state_dict(),
                    os.path.join(output_dir, f"deriv2_discriminator_{epoch}.pt"))
+        torch.save(gan.d2d2_opt.state_dict(),
+                   os.path.join(output_dir, f"d2d2_opt_{epoch}.pt"))
 
 
 def load_checkpoint(gan, output_dir, epoch="last", device="cpu"):
-    """Load model state dicts from output_dir into a GAN instance."""
-    gan.generator.load_state_dict(
-        torch.load(os.path.join(output_dir, f"generator_{epoch}.pt"),
-                   map_location=device))
-    gan.discriminator.load_state_dict(
-        torch.load(os.path.join(output_dir, f"discriminator_{epoch}.pt"),
-                   map_location=device))
+    """Load model and optimizer state dicts from output_dir into a GAN instance."""
+    def _load(path):
+        return torch.load(path, map_location=device)
+
+    gan.generator.load_state_dict(_load(
+        os.path.join(output_dir, f"generator_{epoch}.pt")))
+    gan.g_opt.load_state_dict(_load(
+        os.path.join(output_dir, f"g_opt_{epoch}.pt")))
+
+    gan.discriminator.load_state_dict(_load(
+        os.path.join(output_dir, f"discriminator_{epoch}.pt")))
+    gan.d_opt.load_state_dict(_load(
+        os.path.join(output_dir, f"d_opt_{epoch}.pt")))
+
     if hasattr(gan, "deriv_discriminator"):
-        gan.deriv_discriminator.load_state_dict(
-            torch.load(os.path.join(output_dir, f"deriv_discriminator_{epoch}.pt"),
-                       map_location=device))
+        gan.deriv_discriminator.load_state_dict(_load(
+            os.path.join(output_dir, f"deriv_discriminator_{epoch}.pt")))
+        gan.d2d_opt.load_state_dict(_load(
+            os.path.join(output_dir, f"d2d_opt_{epoch}.pt")))
+
     if hasattr(gan, "deriv2_discriminator"):
-        gan.deriv2_discriminator.load_state_dict(
-            torch.load(os.path.join(output_dir, f"deriv2_discriminator_{epoch}.pt"),
-                       map_location=device))
+        gan.deriv2_discriminator.load_state_dict(_load(
+            os.path.join(output_dir, f"deriv2_discriminator_{epoch}.pt")))
+        gan.d2d2_opt.load_state_dict(_load(
+            os.path.join(output_dir, f"d2d2_opt_{epoch}.pt")))
 
 
 # ---------------------------------------------------------------------------
