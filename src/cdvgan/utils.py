@@ -94,6 +94,24 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=25,
     os.makedirs(output_dir, exist_ok=True)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
+    # Save training config
+    config = dict(
+        variant=variant,
+        epochs=epochs,
+        batch_size=batch_size,
+        save_every=save_every,
+        monitor_every=monitor_every,
+        noise_dim=noise_dim,
+        num_classes=num_classes,
+        signal_length=dataset.signals.shape[-1],
+        lr=gan.g_opt.param_groups[0]["lr"],
+        d_steps=gan.d_steps,
+        gp_weight=gan.gp_weight,
+        device=str(gan.device),
+    )
+    with open(os.path.join(output_dir, "config.json"), "w") as f:
+        json.dump(config, f, indent=2)
+
     # Load existing history if resuming
     history_path = os.path.join(output_dir, "history.json")
     if start_epoch > 1 and os.path.exists(history_path):
