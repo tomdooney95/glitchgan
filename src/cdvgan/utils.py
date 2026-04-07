@@ -62,7 +62,7 @@ class GlitchDataset(Dataset):
 
 def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=50,
               monitor_every=1, output_dir="GAN_outputs", variant="cDVGAN",
-              noise_dim=100, num_classes=7):
+              noise_dim=100, num_classes=7, start_epoch=1):
     """Train a GAN model.
 
     Parameters
@@ -71,6 +71,7 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=50,
         A GAN instance from cdvgan.gan_models.
     dataset : GlitchDataset
     epochs : int
+        Total number of epochs to reach (not additional epochs to run).
     batch_size : int
     save_every : int
         Save full checkpoint and multi-sample example plots every N epochs.
@@ -82,6 +83,8 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=50,
         One of ``"cWGAN"``, ``"cDVGAN"``, ``"cDVGAN2"``.
     noise_dim : int
     num_classes : int
+    start_epoch : int
+        Epoch to start from (1 for fresh training, or resumed checkpoint epoch + 1).
 
     Returns
     -------
@@ -91,9 +94,16 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=50,
     os.makedirs(output_dir, exist_ok=True)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    history = {}
+    # Load existing history if resuming
+    history_path = os.path.join(output_dir, "history.json")
+    if start_epoch > 1 and os.path.exists(history_path):
+        with open(history_path) as f:
+            history = json.load(f)
+        print(f"Resuming from epoch {start_epoch}, loaded existing loss history.")
+    else:
+        history = {}
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         epoch_losses = {}
 
         for batch in tqdm(loader, desc=f"Epoch {epoch}/{epochs}", leave=False):

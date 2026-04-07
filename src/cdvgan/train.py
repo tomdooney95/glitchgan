@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from cdvgan.gan_models import build_gan
-from cdvgan.utils import GlitchDataset, train_gan
+from cdvgan.utils import GlitchDataset, load_checkpoint, train_gan
 
 
 def parse_args():
@@ -44,6 +44,8 @@ def parse_args():
                         help="Save checkpoint and examples every N epochs")
     parser.add_argument("--monitor-every", type=int, default=1,
                         help="Save a monitor plot every N epochs (0 to disable)")
+    parser.add_argument("--resume-epoch", type=int, default=None,
+                        help="Resume training from this checkpoint epoch")
     parser.add_argument("--device", type=str, default=None,
                         help="Device to use (auto-detected if not set)")
     return parser.parse_args()
@@ -104,8 +106,15 @@ def main():
     total_params = sum(p.numel() for p in gan.parameters())
     print(f"Total parameters: {total_params / 1e6:.1f}M")
 
+    # Resume from checkpoint if requested
+    start_epoch = 1
+    if args.resume_epoch is not None:
+        print(f"Loading checkpoint from epoch {args.resume_epoch}...")
+        load_checkpoint(gan, output_dir, epoch=args.resume_epoch, device=device)
+        start_epoch = args.resume_epoch + 1
+
     # Train
-    print(f"Training {args.variant} for {args.epochs} epochs...")
+    print(f"Training {args.variant} from epoch {start_epoch} to {args.epochs}...")
     train_gan(
         gan=gan,
         dataset=dataset,
@@ -117,6 +126,7 @@ def main():
         variant=args.variant,
         noise_dim=args.noise_dim,
         num_classes=args.num_classes,
+        start_epoch=start_epoch,
     )
 
     print(f"Training complete. Outputs saved to {output_dir}")
