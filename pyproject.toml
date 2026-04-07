@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cdvgan"
+dynamic = ["version"]
+description = "Conditional Dual-discriminator Variational GAN for glitch generation"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+    "numpy>=1.26",
+    "matplotlib>=3.9",
+    "tqdm>=4.67",
+    "scikit-learn>=1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+]
+
+[project.scripts]
+cdvgan-train = "cdvgan.train:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+write_to = "src/cdvgan/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=cdvgan --cov-report=term-missing"
