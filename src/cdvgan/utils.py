@@ -60,7 +60,7 @@ class GlitchDataset(Dataset):
 # Training loop
 # ---------------------------------------------------------------------------
 
-def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=50,
+def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=25,
               monitor_every=1, output_dir="GAN_outputs", variant="cDVGAN",
               noise_dim=100, num_classes=7, start_epoch=1):
     """Train a GAN model.
