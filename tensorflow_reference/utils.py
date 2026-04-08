@@ -55,10 +55,15 @@ def generator_loss(fake_sig):
 
 @tf.function
 def calculate_derivative(x, y):
-    """A tf function that calculates the derivative of one vector with respect to another.
-    Used to calculate derivative signals of generated samples during training."""
-    dydx = tf.experimental.numpy.diff(y)/tf.experimental.numpy.diff(x)
-    return dydx
+    """Calculate the derivative dy/dx using finite differences.
+
+    Uses pure TF slice operations to avoid tf.experimental.numpy,
+    which was removed from TF >= 2.16.
+    Works with TF tensors inside GradientTape / tf.function contexts.
+    """
+    dy = y[..., 1:] - y[..., :-1]   # shape (..., L-1)
+    dx = x[1:] - x[:-1]             # shape (L-1,)
+    return dy / dx
 
     
 def plot_GAN_history(history, path, gan_variant):
@@ -153,11 +158,8 @@ class GANMonitor(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
         random_latent_vectors = tf.random.normal(shape=(self.num_img, self.latent_dim))
-               
-        indices = tf.experimental.numpy.random.randint(
-                0,
-                high=num_classes,
-                size=[self.num_img])
+
+        indices = np.random.randint(0, high=num_classes, size=[self.num_img])
         depth = num_classes
         random_classes = tf.one_hot(indices, depth,
                   on_value=1.0, off_value=0.0,
@@ -214,10 +216,7 @@ def f1_m(y_true, y_pred):
 
 def Examples_generator(gan,epoch='last',noise_dim = 100,switch_sim_uni = False,output_path = output_path):
     num_signals = 10
-    indices = tf.experimental.numpy.random.randint(
-            0,
-            high=num_classes,
-            size=[num_signals])
+    indices = np.random.randint(0, high=num_classes, size=[num_signals])
     depth = num_classes
 
     vertex_classes = tf.one_hot(indices, depth,

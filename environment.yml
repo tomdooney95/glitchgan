@@ -1,0 +1,49 @@
+name: cdvgan
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+
+  # ── Scientific core (conda-forge builds are well-tested on arm64) ──────────
+  - numpy>=1.26
+  - scipy
+  - matplotlib>=3.9
+  - scikit-learn>=1.5
+  - tqdm>=4.67
+  - seaborn
+  - pandas
+
+  # ── Jupyter ────────────────────────────────────────────────────────────────
+  - jupyter
+  - ipykernel
+  - ipywidgets
+
+  # ── GW / astrophysics stack ────────────────────────────────────────────────
+  - gwpy
+
+  - pip:
+    # ── PyTorch (MPS backend for Apple Silicon) ───────────────────────────
+    - torch>=2.1
+    - torchvision       # brings useful utilities; not strictly needed
+
+    # ── TensorFlow for Apple Silicon ──────────────────────────────────────
+    - tensorflow-macos  # Apple-optimised TF build
+    - tensorflow-metal  # GPU/MPS acceleration for TF
+
+    # ── Keras 3 (standalone, used for loading .keras checkpoints) ─────────
+    - keras>=3.0
+
+    # ── Dimensionality reduction + visualisation ──────────────────────────
+    - umap-learn
+    - scienceplots
+
+    # ── Gravity Spy stack ─────────────────────────────────────────────────
+    - gravityspy
+    - gengli
+
+    # ── This package (editable install) ───────────────────────────────────
+    - -e .

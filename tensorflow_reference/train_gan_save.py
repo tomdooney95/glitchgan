@@ -6,7 +6,7 @@ os.environ["TF_NUM_INTRAOP_THREADS"] = "4"
 import tensorflow as tf
 from tensorflow import keras
 from keras import layers
-from tensorflow.keras.optimizers import RMSprop
+from keras.optimizers import RMSprop
 import numpy as np
 
 from gan_models import choose_gan

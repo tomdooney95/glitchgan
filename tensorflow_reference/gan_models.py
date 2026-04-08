@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import keras
 from utils import calculate_derivative
-from tensorflow.keras.optimizers import RMSprop, Adam
+from keras.optimizers import RMSprop, Adam
 from model_components import *
 from utils import *
 num_classes = 7

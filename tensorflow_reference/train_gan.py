@@ -21,7 +21,7 @@ tf.config.threading.set_intra_op_parallelism_threads(4)
 tf.config.threading.set_inter_op_parallelism_threads(4)
 from tensorflow import keras
 from keras import layers
-from tensorflow.keras.optimizers import RMSprop
+from keras.optimizers import RMSprop
 import numpy as np
 
 from gan_models import choose_gan

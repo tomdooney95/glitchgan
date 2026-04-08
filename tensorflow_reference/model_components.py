@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 import tensorflow as tf
-from tensorflow.keras import backend as K
+from keras import backend as K
 num_classes = 7
 def conv_block(
     x,

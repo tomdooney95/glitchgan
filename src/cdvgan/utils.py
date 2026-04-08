@@ -1,12 +1,13 @@
 """Training utilities for cDVGAN.
 
 Includes:
-- GlitchDataset       — PyTorch Dataset for GAN training data
-- train_gan()         — main training loop
-- generate_examples() — vertex / simplex / uniform class sampling
-- plot_losses()       — loss curve plotting
-- save_checkpoint()   — save model state dicts
-- load_checkpoint()   — restore model state dicts
+- GlitchDataset         — PyTorch Dataset for GAN training data
+- train_gan()           — main training loop
+- generate_examples()   — vertex / simplex / uniform class sampling
+- plot_losses()         — loss curve plotting
+- save_checkpoint()     — save model state dicts
+- load_checkpoint()     — restore model state dicts
+- whitened_snr_scaling() — scale a signal to a target SNR in the whitened frame
 """
 
 import json
@@ -349,3 +350,40 @@ def plot_losses(history, variant, output_dir):
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, f"{variant}_loss_plot.png"))
     plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Signal utilities
+# ---------------------------------------------------------------------------
+
+def whitened_snr_scaling(glitch, snr, srate=4096):
+    """Scale a glitch signal to a target SNR in the whitened frame.
+
+    Computes the true optimal SNR of the signal via its one-sided power
+    spectral density, then rescales so that the injected signal has the
+    requested SNR.
+
+    Parameters
+    ----------
+    glitch : array-like, shape (..., N)
+        Time-domain glitch signal(s).
+    snr : float or None
+        Target SNR. If None the signal is returned unchanged.
+    srate : int
+        Sample rate in Hz (default 4096).
+
+    Returns
+    -------
+    numpy.ndarray
+        Rescaled glitch signal(s), same shape as input.
+    """
+    glitch = np.asarray(glitch)
+    if snr is not None:
+        df = srate / glitch.shape[-1]
+        glitch_FD = np.fft.rfft(glitch, axis=-1) / srate
+        true_sigma_sq = (
+            4.0 * df
+            * np.sum(np.multiply(np.conj(glitch_FD), glitch_FD), axis=-1).real
+        )
+        glitch = (glitch.T * snr / np.sqrt(true_sigma_sq)).T
+    return glitch

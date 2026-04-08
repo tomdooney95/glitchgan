@@ -1,4 +1,5 @@
 data/
+models/
 .ipynb_checkpoints/
 __pycache__/
 *.pyc
@@ -6,3 +7,4 @@ __pycache__/
 *.egg-info/
 src/cdvgan/_version.py
 GAN_outputs/
+evaluation_plots/
