@@ -9,6 +9,7 @@ Includes:
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 NUM_CLASSES = 7
 
@@ -39,20 +40,31 @@ class ConvBlock(nn.Module):
 
 
 class UpsampleBlock(nn.Module):
-    """Upsample + Conv1d block with optional batchnorm and dropout."""
+    """Upsample + Conv1d block with optional batchnorm and dropout.
+
+    Uses asymmetric padding to match TF padding="same" with stride=1:
+      pad_left  = (kernel_size - 1) // 2
+      pad_right = kernel_size - 1 - pad_left
+    For even kernel_size this differs from symmetric padding=k//2, keeping
+    intermediate sequence lengths exact powers of two throughout the generator.
+    """
 
     def __init__(self, in_channels, out_channels, kernel_size=18, up_size=2,
                  use_bn=False, use_dropout=False, drop_value=0.3, activation=None):
         super().__init__()
         self.upsample = nn.Upsample(scale_factor=up_size)
+        # padding=0 here; asymmetric pad applied manually in forward
         self.conv = nn.Conv1d(in_channels, out_channels, kernel_size,
-                              stride=1, padding=kernel_size // 2, bias=not use_bn)
+                              stride=1, padding=0, bias=not use_bn)
+        self._pad_left  = (kernel_size - 1) // 2
+        self._pad_right = kernel_size - 1 - self._pad_left
         self.bn = nn.BatchNorm1d(out_channels) if use_bn else None
         self.activation = activation if activation is not None else nn.ReLU(inplace=True)
         self.dropout = nn.Dropout(drop_value) if use_dropout else None
 
     def forward(self, x):
         x = self.upsample(x)
+        x = F.pad(x, (self._pad_left, self._pad_right))
         x = self.conv(x)
         if self.bn is not None:
             x = self.bn(x)
@@ -121,9 +133,8 @@ class Generator(nn.Module):
         x = torch.cat([noise, class_emb], dim=1)                # (batch, noise_dim+32)
         x = self.fc(x)                                          # (batch, 256*16)
         x = x.view(x.size(0), 16, 256)                         # (batch, 16, 256)
-        x = self.upsample_blocks(x)                             # (batch, 1, ~signal_length)
-        # Crop or pad to exact output length
-        x = x[:, 0, :self.signal_length]                        # (batch, signal_length)
+        x = self.upsample_blocks(x)                             # (batch, 1, signal_length)
+        x = x[:, 0, :]                                          # (batch, signal_length)
         return x
 
 

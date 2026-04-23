@@ -53,8 +53,10 @@ def _gradient_penalty(discriminator, real, fake, class_vector, device):
         retain_graph=True,
     )[0]
 
-    norm = grads.norm(2, dim=1)
-    return ((norm - 1.0) ** 2).mean()
+    # Global L2 norm across all elements (matches TF implementation which uses
+    # tf.reduce_sum(..., axis=None) rather than per-sample norms).
+    norm = grads.norm(2)
+    return (norm - 1.0) ** 2
 
 
 def wasserstein_discriminator_loss(real_logits, fake_logits):
@@ -218,11 +220,7 @@ class cDVGAN(nn.Module):
             d_loss.backward()
             self.d_opt.step()
 
-            # Derivative discriminator
-            fake_derivs = torch.diff(self.generator(
-                torch.randn(batch, self.noise_dim, device=self.device), class_vector
-            ).detach(), dim=-1)
-
+            # Derivative discriminator — reuse the same fake batch as above
             real_logits2d = self.deriv_discriminator(real_derivs, class_vector)
             fake_logits2d = self.deriv_discriminator(fake_derivs, class_vector)
             gp2d = _gradient_penalty(self.deriv_discriminator, real_derivs, fake_derivs, class_vector, self.device)
