@@ -36,6 +36,8 @@ dependencies:
 
     # ── Keras 3 (standalone, used for loading .keras checkpoints) ─────────
     - keras>=3.0
+    # ── Keras 2 compatibility layer (for loading old .keras models) ────────
+    - tf_keras
 
     # ── Dimensionality reduction + visualisation ──────────────────────────
     - umap-learn

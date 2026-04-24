@@ -102,8 +102,8 @@ class cWGAN(nn.Module):
         self.generator = Generator(noise_dim, num_classes, signal_length).to(self.device)
         self.discriminator = Discriminator(signal_length, num_classes).to(self.device)
 
-        self.g_opt = optim.RMSprop(self.generator.parameters(), lr=lr)
-        self.d_opt = optim.RMSprop(self.discriminator.parameters(), lr=lr)
+        self.g_opt = optim.RMSprop(self.generator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
+        self.d_opt = optim.RMSprop(self.discriminator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
 
     def train_step(self, real_signals, class_vector):
         """One training step.
@@ -182,9 +182,9 @@ class cDVGAN(nn.Module):
         self.discriminator = Discriminator(signal_length, num_classes).to(self.device)
         self.deriv_discriminator = DerivativeDiscriminator(signal_length - 1, num_classes).to(self.device)
 
-        self.g_opt = optim.RMSprop(self.generator.parameters(), lr=lr)
-        self.d_opt = optim.RMSprop(self.discriminator.parameters(), lr=lr)
-        self.d2d_opt = optim.RMSprop(self.deriv_discriminator.parameters(), lr=lr)
+        self.g_opt = optim.RMSprop(self.generator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
+        self.d_opt = optim.RMSprop(self.discriminator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
+        self.d2d_opt = optim.RMSprop(self.deriv_discriminator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
 
     def train_step(self, real_signals, real_derivs, class_vector):
         """One training step.
@@ -284,10 +284,10 @@ class cDVGAN2(nn.Module):
         self.deriv_discriminator = DerivativeDiscriminator(signal_length - 1, num_classes).to(self.device)
         self.deriv2_discriminator = SecondDerivativeDiscriminator(signal_length - 2, num_classes).to(self.device)
 
-        self.g_opt = optim.RMSprop(self.generator.parameters(), lr=lr)
-        self.d_opt = optim.RMSprop(self.discriminator.parameters(), lr=lr)
-        self.d2d_opt = optim.RMSprop(self.deriv_discriminator.parameters(), lr=lr)
-        self.d2d2_opt = optim.RMSprop(self.deriv2_discriminator.parameters(), lr=lr)
+        self.g_opt = optim.RMSprop(self.generator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
+        self.d_opt = optim.RMSprop(self.discriminator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
+        self.d2d_opt = optim.RMSprop(self.deriv_discriminator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
+        self.d2d2_opt = optim.RMSprop(self.deriv2_discriminator.parameters(), lr=lr, alpha=0.9, eps=1e-7)
 
     def _fake_and_derivs(self, batch, class_vector):
         noise = torch.randn(batch, self.noise_dim, device=self.device)
