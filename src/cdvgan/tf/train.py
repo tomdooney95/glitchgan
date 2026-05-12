@@ -56,6 +56,8 @@ def parse_args():
                         help="Save model checkpoint every N epochs")
     parser.add_argument("--monitor-every", type=int, default=1,
                         help="Save a monitor plot every N epochs (0 to disable)")
+    parser.add_argument("--resume-epoch", type=int, default=None,
+                        help="Resume training from this checkpoint epoch")
     return parser.parse_args()
 
 
@@ -96,7 +98,8 @@ def main():
     )
 
     # Train
-    print(f"Training {args.variant} for {args.epochs} epochs...")
+    start = args.resume_epoch if args.resume_epoch is not None else 1
+    print(f"Training {args.variant} from epoch {start} to {args.epochs}...")
     train_gan(
         gan=gan,
         signals=signals,
@@ -111,6 +114,7 @@ def main():
         output_dir=output_dir,
         noise_dim=args.noise_dim,
         num_classes=args.num_classes,
+        resume_epoch=args.resume_epoch,
     )
 
     print(f"Training complete. Outputs saved to {output_dir}")

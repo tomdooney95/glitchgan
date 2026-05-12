@@ -101,7 +101,7 @@ class GANMonitor(keras.callbacks.Callback):
 def train_gan(gan, signals, classes, derivs=None, derivs2=None,
               epochs=500, batch_size=64, variant="cDVGAN",
               save_every=25, monitor_every=1, output_dir="GAN_outputs",
-              noise_dim=100, num_classes=7):
+              noise_dim=100, num_classes=7, resume_epoch=None):
     """Train a TF GAN model.
 
     Parameters
@@ -126,6 +126,12 @@ def train_gan(gan, signals, classes, derivs=None, derivs2=None,
     """
     os.makedirs(output_dir, exist_ok=True)
 
+    initial_epoch = 0
+    if resume_epoch is not None:
+        print(f"Resuming from epoch {resume_epoch}...")
+        load_models(gan, output_dir, epoch=resume_epoch)
+        initial_epoch = resume_epoch
+
     dataset = build_dataset(signals, classes, derivs=derivs, derivs2=derivs2,
                             batch_size=batch_size)
 
@@ -141,7 +147,8 @@ def train_gan(gan, signals, classes, derivs=None, derivs2=None,
     # train_step manages its own optimizers. Call compile with no args.
     gan.compile()
 
-    history = gan.fit(dataset, epochs=epochs, callbacks=callbacks)
+    history = gan.fit(dataset, epochs=epochs, initial_epoch=initial_epoch,
+                      callbacks=callbacks)
 
     # Save final models and history
     save_models(gan, output_dir, epoch="final")
@@ -168,8 +175,9 @@ def train_gan(gan, signals, classes, derivs=None, derivs2=None,
 # ---------------------------------------------------------------------------
 
 def save_models(gan, output_dir, epoch="last"):
-    """Save all model components in .keras format."""
+    """Save all model components in .keras format plus optimizer states."""
     os.makedirs(output_dir, exist_ok=True)
+
     gan.generator.save(os.path.join(output_dir, f"generator_{epoch}.keras"))
     gan.discriminator.save(os.path.join(output_dir, f"discriminator_{epoch}.keras"))
     if hasattr(gan, "deriv_discriminator"):
@@ -179,9 +187,17 @@ def save_models(gan, output_dir, epoch="last"):
         gan.deriv2_discriminator.save(
             os.path.join(output_dir, f"deriv2_discriminator_{epoch}.keras"))
 
+    ckpt_kwargs = {"g_optimizer": gan.g_optimizer, "d_optimizer": gan.d_optimizer}
+    if hasattr(gan, "d2d_optimizer"):
+        ckpt_kwargs["d2d_optimizer"] = gan.d2d_optimizer
+    if hasattr(gan, "d2d2_optimizer"):
+        ckpt_kwargs["d2d2_optimizer"] = gan.d2d2_optimizer
+    tf.train.Checkpoint(**ckpt_kwargs).write(
+        os.path.join(output_dir, f"optimizers_{epoch}"))
+
 
 def load_models(gan, output_dir, epoch="last"):
-    """Load model weights from .keras files into an existing GAN instance."""
+    """Restore model weights and optimizer states from a checkpoint."""
     gan.generator = keras.models.load_model(
         os.path.join(output_dir, f"generator_{epoch}.keras"))
     gan.discriminator = keras.models.load_model(
@@ -192,6 +208,16 @@ def load_models(gan, output_dir, epoch="last"):
     if hasattr(gan, "deriv2_discriminator"):
         gan.deriv2_discriminator = keras.models.load_model(
             os.path.join(output_dir, f"deriv2_discriminator_{epoch}.keras"))
+
+    # Optimizer slot variables are created lazily on first apply_gradients;
+    # deferred restore ensures they are populated as soon as they exist.
+    ckpt_kwargs = {"g_optimizer": gan.g_optimizer, "d_optimizer": gan.d_optimizer}
+    if hasattr(gan, "d2d_optimizer"):
+        ckpt_kwargs["d2d_optimizer"] = gan.d2d_optimizer
+    if hasattr(gan, "d2d2_optimizer"):
+        ckpt_kwargs["d2d2_optimizer"] = gan.d2d2_optimizer
+    tf.train.Checkpoint(**ckpt_kwargs).restore(
+        os.path.join(output_dir, f"optimizers_{epoch}")).expect_partial()
 
 
 # ---------------------------------------------------------------------------

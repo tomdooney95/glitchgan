@@ -267,6 +267,32 @@ class cDVGAN2(keras.Model):
 
 
 # ---------------------------------------------------------------------------
+# GlitchGAN — cDVGAN configured for LIGO glitch data
+# ---------------------------------------------------------------------------
+
+class GlitchGAN(cDVGAN):
+    """cDVGAN trained on LIGO gravitational-wave glitch data.
+
+    Fixes the LIGO-specific defaults (signal length, number of glitch classes)
+    so they don't need to be passed at every call site.  All architecture and
+    training logic lives in :class:`cDVGAN`.
+    """
+
+    SIGNAL_LENGTH = 8192
+    NUM_CLASSES = 7
+
+    def __init__(self, noise_dim=100, d_steps=5, gp_weight=10.0, lr=1e-4):
+        super().__init__(
+            signal_length=self.SIGNAL_LENGTH,
+            num_classes=self.NUM_CLASSES,
+            noise_dim=noise_dim,
+            d_steps=d_steps,
+            gp_weight=gp_weight,
+            lr=lr,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
