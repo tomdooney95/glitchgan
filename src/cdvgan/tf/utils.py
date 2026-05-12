@@ -57,6 +57,14 @@ def build_dataset(signals, classes, derivs=None, derivs2=None,
                .shuffle(shuffle_buffer)
                .batch(batch_size, drop_remainder=True)
                .prefetch(tf.data.AUTOTUNE))
+
+    # Limit tf.data's private thread pool on shared HPC nodes where
+    # RLIMIT_NPROC is a hard per-user limit.  private_threadpool_size=0
+    # falls back to the global pool; a small positive value caps new threads.
+    options = tf.data.Options()
+    options.threading.private_threadpool_size = 4
+    options.threading.max_intra_op_parallelism = 1
+    dataset = dataset.with_options(options)
     return dataset
 
 
