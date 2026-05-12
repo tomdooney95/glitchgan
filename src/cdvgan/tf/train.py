@@ -90,7 +90,7 @@ def parse_args():
                         help="Gradient penalty weight (lambda)")
     parser.add_argument("--lr", type=float, default=1e-4,
                         help="Learning rate for RMSprop optimisers")
-    parser.add_argument("--save-every", type=int, default=25,
+    parser.add_argument("--save-every", type=int, default=10,
                         help="Save model checkpoint every N epochs")
     parser.add_argument("--monitor-every", type=int, default=1,
                         help="Save a monitor plot every N epochs (0 to disable)")

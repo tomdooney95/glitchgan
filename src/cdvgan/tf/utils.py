@@ -108,7 +108,7 @@ class GANMonitor(keras.callbacks.Callback):
 
 def train_gan(gan, signals, classes, derivs=None, derivs2=None,
               epochs=500, batch_size=64, variant="cDVGAN",
-              save_every=25, monitor_every=1, output_dir="GAN_outputs",
+              save_every=10, monitor_every=1, output_dir="GAN_outputs",
               noise_dim=100, num_classes=7, resume_epoch=None):
     """Train a TF GAN model.
 
