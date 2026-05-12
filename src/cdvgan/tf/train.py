@@ -9,6 +9,14 @@ Usage::
 import argparse
 import os
 
+# Cap TF's CPU thread pool before EagerContext is created.
+# On shared HPC nodes the per-user thread limit (RLIMIT_NPROC) is typically
+# ~1024, but TF 2.x defaults to one Eigen thread per physical core which can
+# easily exceed that on many-core nodes.  Override with env vars so users can
+# still increase them if needed (e.g. export TF_NUM_INTRAOP_THREADS=32).
+os.environ.setdefault("TF_NUM_INTEROP_THREADS", "4")
+os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "8")
+
 import numpy as np
 import tensorflow as tf
 
