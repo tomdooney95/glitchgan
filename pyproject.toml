@@ -28,6 +28,7 @@ tensorflow = [
 [project.scripts]
 cdvgan-train    = "cdvgan.train:main"
 cdvgan-train-tf = "cdvgan.tf.train:main"
+glitchgan.train = "cdvgan.tf.train:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
