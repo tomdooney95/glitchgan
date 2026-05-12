@@ -16,6 +16,25 @@ from cdvgan.tf.gan_models import build_gan
 from cdvgan.tf.utils import train_gan
 
 
+def _pick_best_gpu(gpus):
+    """Return index of the GPU with the most free memory, via nvidia-smi."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, check=True,
+        )
+        free = [int(x.strip()) for x in result.stdout.strip().splitlines()]
+        # Only consider GPUs visible to TF
+        free = free[:len(gpus)]
+        best = free.index(max(free))
+        print(f"GPU free memory (MiB): {free} — selecting GPU {best}")
+        return best
+    except Exception as exc:
+        print(f"nvidia-smi query failed ({exc}), defaulting to GPU 0")
+        return 0
+
+
 def _setup_gpu():
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
@@ -24,8 +43,9 @@ def _setup_gpu():
                    else tf.config.experimental.set_memory_growth)
         for gpu in gpus:
             _set_mg(gpu, True)
-        tf.config.set_visible_devices(gpus[0], "GPU")
-        print(f"Using GPU: {gpus[0]}")
+        best = _pick_best_gpu(gpus)
+        tf.config.set_visible_devices(gpus[best], "GPU")
+        print(f"Using GPU: {gpus[best]}")
     else:
         print("No GPU found, running on CPU.")
     print(f"TensorFlow version: {tf.__version__}")
