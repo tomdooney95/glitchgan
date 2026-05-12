@@ -19,8 +19,11 @@ from cdvgan.tf.utils import train_gan
 def _setup_gpu():
     gpus = tf.config.list_physical_devices("GPU")
     if gpus:
+        _set_mg = (tf.config.set_memory_growth
+                   if hasattr(tf.config, "set_memory_growth")
+                   else tf.config.experimental.set_memory_growth)
         for gpu in gpus:
-            tf.config.set_memory_growth(gpu, True)
+            _set_mg(gpu, True)
         tf.config.set_visible_devices(gpus[0], "GPU")
         print(f"Using GPU: {gpus[0]}")
     else:
