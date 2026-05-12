@@ -145,7 +145,10 @@ def train_gan(gan, signals, classes, derivs=None, derivs2=None,
 
     # Keras model.fit() requires compile() to have been called, but our custom
     # train_step manages its own optimizers. Call compile with no args.
-    gan.compile()
+    # jit_compile=False: Keras 3.x defaults to XLA JIT on GPU, which spawns
+    # a large Eigen thread pool during compilation that exceeds RLIMIT_NPROC
+    # on shared HPC nodes.  Native CUDA/cuDNN kernels are fast enough here.
+    gan.compile(jit_compile=False)
 
     history = gan.fit(dataset, epochs=epochs, initial_epoch=initial_epoch,
                       callbacks=callbacks)
