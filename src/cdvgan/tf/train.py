@@ -16,6 +16,10 @@ import os
 # still increase them if needed (e.g. export TF_NUM_INTRAOP_THREADS=32).
 os.environ.setdefault("TF_NUM_INTEROP_THREADS", "4")
 os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "8")
+# Disable XLA auto-JIT: the XLA compiler spawns its own thread pools during
+# graph compilation which also hit RLIMIT_NPROC on shared HPC nodes.
+# Native CUDA/cuDNN kernels are used instead — no meaningful perf loss on GANs.
+os.environ.setdefault("TF_XLA_FLAGS", "--tf_xla_auto_jit=0")
 
 import numpy as np
 import tensorflow as tf
