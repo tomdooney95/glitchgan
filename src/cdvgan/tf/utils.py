@@ -19,6 +19,16 @@ import numpy as np
 import tensorflow as tf
 import keras
 
+from cdvgan.tf.model_components import ArgmaxLayer, ReduceSumDotLayer
+
+# Passed to keras.models.load_model so custom layers can be found regardless
+# of whether the checkpoint was saved before the @register_keras_serializable
+# decorator was present.
+_CUSTOM_OBJECTS = {
+    "ArgmaxLayer": ArgmaxLayer,
+    "ReduceSumDotLayer": ReduceSumDotLayer,
+}
+
 
 # ---------------------------------------------------------------------------
 # Dataset builder
@@ -210,15 +220,19 @@ def save_models(gan, output_dir, epoch="last"):
 def load_models(gan, output_dir, epoch="last"):
     """Restore model weights and optimizer states from a checkpoint."""
     gan.generator = keras.models.load_model(
-        os.path.join(output_dir, f"generator_{epoch}.keras"))
+        os.path.join(output_dir, f"generator_{epoch}.keras"),
+        custom_objects=_CUSTOM_OBJECTS)
     gan.discriminator = keras.models.load_model(
-        os.path.join(output_dir, f"discriminator_{epoch}.keras"))
+        os.path.join(output_dir, f"discriminator_{epoch}.keras"),
+        custom_objects=_CUSTOM_OBJECTS)
     if hasattr(gan, "deriv_discriminator"):
         gan.deriv_discriminator = keras.models.load_model(
-            os.path.join(output_dir, f"deriv_discriminator_{epoch}.keras"))
+            os.path.join(output_dir, f"deriv_discriminator_{epoch}.keras"),
+            custom_objects=_CUSTOM_OBJECTS)
     if hasattr(gan, "deriv2_discriminator"):
         gan.deriv2_discriminator = keras.models.load_model(
-            os.path.join(output_dir, f"deriv2_discriminator_{epoch}.keras"))
+            os.path.join(output_dir, f"deriv2_discriminator_{epoch}.keras"),
+            custom_objects=_CUSTOM_OBJECTS)
 
     # Optimizer slot variables are created lazily on first apply_gradients;
     # deferred restore ensures they are populated as soon as they exist.
