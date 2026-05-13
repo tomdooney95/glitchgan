@@ -16,12 +16,14 @@ NUM_CLASSES = 7
 # Helper layers (replace deprecated Lambda layers)
 # ---------------------------------------------------------------------------
 
+@keras.saving.register_keras_serializable(package="cdvgan")
 class ArgmaxLayer(keras.layers.Layer):
     """Return the argmax along the last axis as int32."""
     def call(self, x):
         return tf.cast(tf.argmax(x, axis=-1), tf.int32)
 
 
+@keras.saving.register_keras_serializable(package="cdvgan")
 class ReduceSumDotLayer(keras.layers.Layer):
     """Compute element-wise product and sum along axis 1 (keepdims)."""
     def call(self, inputs):
