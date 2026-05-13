@@ -133,11 +133,12 @@ def train_gan(gan, signals, classes, derivs=None, derivs2=None,
     dict  — loss history
     """
     os.makedirs(output_dir, exist_ok=True)
+    monitor_dir = os.path.join(output_dir, "monitor")
 
     initial_epoch = 0
     if resume_epoch is not None:
         print(f"Resuming from epoch {resume_epoch}...")
-        load_models(gan, output_dir, epoch=resume_epoch)
+        load_models(gan, monitor_dir, epoch=resume_epoch)
         initial_epoch = resume_epoch
 
     dataset = build_dataset(signals, classes, derivs=derivs, derivs2=derivs2,
@@ -145,7 +146,6 @@ def train_gan(gan, signals, classes, derivs=None, derivs2=None,
 
     callbacks = []
     if monitor_every > 0:
-        monitor_dir = os.path.join(output_dir, "monitor")
         callbacks.append(GANMonitor(
             noise_dim=noise_dim, num_classes=num_classes,
             output_dir=monitor_dir, save_model_every=save_every,
