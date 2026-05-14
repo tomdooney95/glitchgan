@@ -152,7 +152,8 @@ def train_gan(gan, signals, classes, derivs=None, derivs2=None,
         initial_epoch = resume_epoch
 
     dataset = build_dataset(signals, classes, derivs=derivs, derivs2=derivs2,
-                            batch_size=batch_size)
+                            batch_size=batch_size,
+                            shuffle_buffer=len(signals))
 
     callbacks = []
     if monitor_every > 0:

@@ -28,7 +28,7 @@ def _diff(x):
 
 def _gradient_penalty(discriminator, real, fake, classes, batch_size):
     """WGAN-GP gradient penalty for a given discriminator."""
-    alpha = tf.random.uniform([batch_size, 1], 0.0, 1.0, dtype=tf.float32)
+    alpha = tf.random.normal([batch_size, 1], 0.0, 1.0, dtype=tf.float32)
     interpolated = real + alpha * (fake - real)
 
     with tf.GradientTape() as gp_tape:

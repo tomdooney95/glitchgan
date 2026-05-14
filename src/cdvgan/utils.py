@@ -5,6 +5,7 @@ Includes:
 - train_gan()           — main training loop
 - generate_examples()   — vertex / simplex / uniform class sampling
 - plot_losses()         — loss curve plotting
+- plot_q_transform()    — Q-transform plot via gwpy
 - save_checkpoint()     — save model state dicts
 - load_checkpoint()     — restore model state dicts
 - whitened_snr_scaling() — scale a signal to a target SNR in the whitened frame
@@ -14,6 +15,7 @@ import json
 import os
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -350,6 +352,96 @@ def plot_losses(history, variant, output_dir):
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, f"{variant}_loss_plot.png"))
     plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Visualisation
+# ---------------------------------------------------------------------------
+
+def plot_q_transform(
+    data,
+    srate=4096.0,
+    crop=None,
+    whiten=True,
+    ax=None,
+    colourbar=True,
+    qrange=(4, 64),
+    frange=(10, 1200),
+    clim=(0, 25.5),
+):
+    """Plot the Q-transform of a time series using gwpy.
+
+    Parameters
+    ----------
+    data : array-like
+        Input time-domain data.
+    srate : float
+        Sample rate in Hz.
+    crop : tuple or None
+        ``(center_time, duration)`` in seconds. ``center_time`` is measured
+        from the start of ``data`` (i.e. t0=0). If None the full segment is used.
+    whiten : bool
+        If True, apply gwpy's internal whitening before the Q-transform.
+        Pass False when the signal is already whitened or noise-free.
+    ax : matplotlib.axes.Axes or None
+        Axes to plot on. A new figure is created if None.
+    colourbar : bool
+        Add a colorbar to the plot.
+    qrange : tuple
+        (q_min, q_max) range for the Q-transform.
+    frange : tuple
+        (f_min, f_max) frequency range in Hz.
+    clim : tuple
+        (vmin, vmax) colour axis limits for normalised energy.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    from gwpy.timeseries import TimeSeries as GWpyTS
+
+    ts = GWpyTS(data, sample_rate=srate)
+
+    q_scan = ts.q_transform(
+        qrange=qrange,
+        frange=frange,
+        tres=0.002,
+        fres=0.5,
+        whiten=whiten,
+    )
+
+    if isinstance(crop, (list, tuple)):
+        t_center, dur = crop
+        t_center = t_center + ts.t0.value
+        q_scan = q_scan.crop(t_center - dur / 2, t_center + dur / 2)
+        t_end = dur
+    else:
+        t_end = len(data) / srate
+        dur = t_end
+
+    extent = [0, t_end, frange[0], frange[1]]
+    xticklabels = np.linspace(0, t_end, 5)
+
+    if ax is None:
+        _, ax = plt.subplots(dpi=120)
+
+    im = ax.imshow(q_scan, aspect="auto", extent=extent)
+    ax.set_yscale("log", base=2)
+    ax.set_xscale("linear")
+    ax.set_xticks(xticklabels)
+    ax.set_xticklabels([f"{v:.2g}" for v in xticklabels])
+    ax.set_ylabel("Frequency (Hz)", fontsize=14)
+    ax.set_xlabel("Time (s)", labelpad=0.1, fontsize=14)
+    ax.yaxis.set_major_formatter(ticker.ScalarFormatter())
+    ax.tick_params(axis="both", which="major", labelsize=14)
+
+    im.set_clim(*clim)
+    if colourbar:
+        cb = ax.figure.colorbar(im, ax=ax, pad=0.01)
+        cb.ax.tick_params(labelsize=18)
+        cb.set_label("Normalised energy", fontsize=24)
+
+    return ax
 
 
 # ---------------------------------------------------------------------------
