@@ -1,10 +1,33 @@
+# Data (too large for git — see README for download instructions)
 data/
-models/
-.ipynb_checkpoints/
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-src/cdvgan/_version.py
-GAN_outputs/
+
+# Generated outputs
 evaluation_plots/
+plots/
+GAN_outputs*/
+
+# GravitySpy model weights (large binary — download separately)
+models/
+
+# PyTorch weights (not part of published release)
+weights/pytorch/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+src/cdvgan/_version.py
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+*.log
+
+# macOS
+.DS_Store
