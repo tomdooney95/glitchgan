@@ -19,7 +19,7 @@ import numpy as np
 import tensorflow as tf
 import keras
 
-from cdvgan.tf.model_components import ArgmaxLayer, ReduceSumDotLayer
+from glitchgan.tf.model_components import ArgmaxLayer, ReduceSumDotLayer
 
 # Passed to keras.models.load_model so custom layers can be found regardless
 # of whether the checkpoint was saved before the @register_keras_serializable

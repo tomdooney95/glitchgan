@@ -71,7 +71,7 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=25,
     Parameters
     ----------
     gan : cWGAN | cDVGAN | cDVGAN2
-        A GAN instance from cdvgan.gan_models.
+        A GAN instance from glitchgan.gan_models.
     dataset : GlitchDataset
     epochs : int
         Total number of epochs to reach (not additional epochs to run).

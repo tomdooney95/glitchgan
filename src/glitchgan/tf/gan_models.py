@@ -11,7 +11,7 @@ import tensorflow as tf
 import keras
 from keras.optimizers import RMSprop
 
-from cdvgan.tf.model_components import (
+from glitchgan.tf.model_components import (
     get_discriminator_model,
     get_derivative_discriminator_model,
     get_second_derivative_discriminator_model,

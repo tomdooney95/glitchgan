@@ -3,16 +3,16 @@ requires = ["setuptools>=64", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cdvgan"
+name = "glitchgan"
 dynamic = ["version"]
-description = "Conditional Dual-discriminator Variational GAN for glitch generation"
+description = "Synthetic LIGO gravitational-wave glitch generator (cDVGAN architecture)"
 requires-python = ">=3.10"
 dependencies = [
-    "torch>=2.1",
     "numpy>=1.26",
     "matplotlib>=3.9",
-    "tqdm>=4.67",
-    "scikit-learn>=1.5",
+    "huggingface_hub>=0.23",
+    "tensorflow>=2.16",
+    "keras>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -20,22 +20,16 @@ dev = [
     "pytest>=8",
     "pytest-cov>=5",
 ]
-tensorflow = [
-    "tensorflow>=2.10",
-    "keras>=2.10",
-]
 
 [project.scripts]
-cdvgan-train    = "cdvgan.train:main"
-cdvgan-train-tf = "cdvgan.tf.train:main"
-"glitchgan.train" = "cdvgan.tf.train:main"
+glitchgan-train    = "glitchgan.tf.train:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools_scm]
-write_to = "src/cdvgan/_version.py"
+write_to = "src/glitchgan/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --cov=cdvgan --cov-report=term-missing"
+addopts = "-v --cov=glitchgan --cov-report=term-missing"

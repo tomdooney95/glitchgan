@@ -2,7 +2,7 @@
 
 Usage::
 
-    python -m cdvgan.tf.train --variant cDVGAN --data-dir data/ --epochs 500
+    python -m glitchgan.tf.train --variant cDVGAN --data-dir data/ --epochs 500
 
 """
 
@@ -27,8 +27,8 @@ os.environ.setdefault("XLA_FLAGS", "--xla_cpu_multi_thread_eigen=false")
 import numpy as np
 import tensorflow as tf
 
-from cdvgan.tf.gan_models import build_gan
-from cdvgan.tf.utils import train_gan
+from glitchgan.tf.gan_models import build_gan
+from glitchgan.tf.utils import train_gan
 
 
 def _pick_best_gpu(gpus):
