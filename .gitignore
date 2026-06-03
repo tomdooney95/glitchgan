@@ -31,3 +31,6 @@ src/cdvgan/_version.py
 
 # macOS
 .DS_Store
+
+# Classification output CSVs
+notebooks/*.csv
