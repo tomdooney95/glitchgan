@@ -34,3 +34,7 @@ src/cdvgan/_version.py
 
 # Classification output CSVs
 notebooks/*.csv
+
+# Sphinx docs build + auto-copied notebooks (canonical copies live in notebooks/)
+docs/_build/
+docs/notebooks/

@@ -1,0 +1,120 @@
+/* ── GlitchGAN custom dark theme ─────────────────────────────────────── */
+
+/* Force dark mode as default */
+:root {
+    color-scheme: dark;
+}
+
+/* Code blocks */
+[data-theme="dark"] div[class*="highlight"] {
+    background: #161b27;
+    border: 1px solid #2a3147;
+    border-radius: 6px;
+}
+
+[data-theme="dark"] pre {
+    background: #161b27 !important;
+}
+
+/* Inline code */
+[data-theme="dark"] code.literal {
+    background: #1c2333;
+    border: 1px solid #2a3147;
+    border-radius: 4px;
+    color: #79c0ff;
+    padding: 1px 5px;
+}
+
+/* Tables */
+[data-theme="dark"] table.docutils {
+    border: 1px solid #2a3147;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+[data-theme="dark"] table.docutils th {
+    background: #161b27;
+    color: #e6edf3;
+    border-bottom: 2px solid #2a3147;
+}
+
+[data-theme="dark"] table.docutils td {
+    border-color: #2a3147;
+}
+
+[data-theme="dark"] table.docutils tr:hover td {
+    background: #1c2333;
+}
+
+/* Admonition boxes */
+[data-theme="dark"] .admonition {
+    border-radius: 6px;
+    border-left: 4px solid var(--color-brand-primary);
+    background: #161b27;
+}
+
+[data-theme="dark"] .admonition.note {
+    border-left-color: #58a6ff;
+}
+
+[data-theme="dark"] .admonition.warning {
+    border-left-color: #d29922;
+}
+
+[data-theme="dark"] .admonition.tip {
+    border-left-color: #3fb950;
+}
+
+/* Sidebar logo / title */
+.sidebar-brand-text {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+/* Content headings */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3 {
+    color: #e6edf3;
+}
+
+[data-theme="dark"] h1 {
+    border-bottom: 1px solid #2a3147;
+    padding-bottom: 0.3em;
+}
+
+/* API reference member entries */
+[data-theme="dark"] dl.py dt {
+    background: #161b27;
+    border-left: 3px solid #58a6ff;
+    border-radius: 0 4px 4px 0;
+    padding: 4px 8px;
+    color: #79c0ff;
+}
+
+/* Search bar */
+[data-theme="dark"] input[type="search"] {
+    background: #161b27;
+    border: 1px solid #2a3147;
+    color: #e6edf3;
+    border-radius: 6px;
+}
+
+/* Scrollbar */
+[data-theme="dark"] ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: #0d1117;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: #2a3147;
+    border-radius: 3px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: #58a6ff;
+}
