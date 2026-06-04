@@ -40,6 +40,9 @@ eval = [
     "umap-learn>=0.5",
     "seaborn>=0.13",
     "scienceplots>=2.0",
+    "gwpy>=3.0",
+    "pycbc>=2.0",
+    "gravityspy>=0.9",
 ]
 docs = [
     "sphinx>=7",
