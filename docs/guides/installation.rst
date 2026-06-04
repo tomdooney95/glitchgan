@@ -4,15 +4,32 @@ Installation
 Requirements
 ------------
 
-- Python ≥ 3.10
+- Python 3.10–3.12 (Python 3.13+ is not yet supported by TensorFlow)
 - TensorFlow ≥ 2.16
 - Keras ≥ 3.0
+
+.. note::
+
+   If you attempt to install GlitchGAN with Python 3.13 or later, pip will
+   reject it immediately with a ``Requires-Python`` error.
 
 Basic install
 -------------
 
 .. code-block:: bash
 
+   pip install glitchgan
+
+Recommended: conda environment
+--------------------------------
+
+TensorFlow can be tricky to install on some platforms. A conda environment
+with Python 3.11 is the most reliable setup:
+
+.. code-block:: bash
+
+   conda create -n glitchgan python=3.11
+   conda activate glitchgan
    pip install glitchgan
 
 Install from source
