@@ -19,7 +19,7 @@ glitch waveforms** conditioned on a glitch class, enabling:
 Architecture
 ------------
 
-The model is a **cDVGAN** (class-conditional Dual-discriminator Variational GAN) with
+The model is a **cDVGAN** (class-conditional Derivative GAN) with
 two Wasserstein discriminators and gradient penalty:
 
 .. code-block:: text
