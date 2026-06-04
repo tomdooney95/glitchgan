@@ -42,7 +42,8 @@ eval = [
     "scienceplots>=2.0",
     "gwpy>=3.0",
     "pycbc>=2.0",
-    "gravityspy>=0.9",
+    # gravityspy pins scipy<=1.2.1 which can't build on Python>=3.11;
+    # install via the bundled conda environment instead
 ]
 docs = [
     "sphinx>=7",
