@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "numpy>=1.26",
     "matplotlib>=3.9",
+    "pandas>=2.0",
     "huggingface_hub>=0.23",
     "tensorflow>=2.16",
     "keras>=3.0",
