@@ -45,6 +45,8 @@ eval = [
     "scikit-image>=0.19",
     "gwtrigfind>=0.7",
     "panoptes-client>=1.0",
+    "sqlalchemy>=1.4",
+    "tables>=3.0",
     # gravityspy itself must be installed from GitHub (PyPI release is broken):
     # pip install git+https://github.com/Gravity-Spy/GravitySpy.git --no-deps
 ]
