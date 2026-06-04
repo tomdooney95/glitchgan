@@ -38,6 +38,8 @@ dev = [
 ]
 eval = [
     "umap-learn>=0.5",
+    "seaborn>=0.13",
+    "scienceplots>=2.0",
 ]
 docs = [
     "sphinx>=7",
