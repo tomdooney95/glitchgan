@@ -42,8 +42,11 @@ eval = [
     "scienceplots>=2.0",
     "gwpy>=3.0",
     "pycbc>=2.0",
-    # gravityspy pins scipy<=1.2.1 which can't build on Python>=3.11;
-    # install via the bundled conda environment instead
+    "scikit-image>=0.19",
+    "gwtrigfind>=0.7",
+    "panoptes-client>=1.0",
+    # gravityspy itself must be installed from GitHub (PyPI release is broken):
+    # pip install git+https://github.com/Gravity-Spy/GravitySpy.git --no-deps
 ]
 docs = [
     "sphinx>=7",
