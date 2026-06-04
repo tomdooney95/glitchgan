@@ -28,6 +28,7 @@ try:
     _TORCH_AVAILABLE = True
 except ImportError:
     _TORCH_AVAILABLE = False
+    Dataset = object  # stub so class GlitchDataset(Dataset) is valid at import time
 
 
 def _require_torch(fn_name):
