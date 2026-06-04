@@ -17,9 +17,24 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
-import torch
-from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+
+# torch is only needed for the PyTorch training utilities (GlitchDataset,
+# checkpointing, generate_with_noise). Import lazily so that the inference
+# and plotting utilities work without torch installed.
+try:
+    import torch
+    from torch.utils.data import DataLoader, Dataset
+    _TORCH_AVAILABLE = True
+except ImportError:
+    _TORCH_AVAILABLE = False
+
+
+def _require_torch(fn_name):
+    if not _TORCH_AVAILABLE:
+        raise ImportError(
+            f"{fn_name} requires PyTorch. Install it with: pip install torch"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +57,7 @@ class GlitchDataset(Dataset):
     """
 
     def __init__(self, signals, class_array, derivs=None, derivs2=None):
+        _require_torch("GlitchDataset")
         self.signals = torch.tensor(signals, dtype=torch.float32)
         self.classes = torch.tensor(class_array, dtype=torch.float32)
         self.derivs = torch.tensor(derivs, dtype=torch.float32) if derivs is not None else None
@@ -94,6 +110,7 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=25,
     dict
         Loss history — keys are loss names, values are lists over epochs.
     """
+    _require_torch("train_gan")
     os.makedirs(output_dir, exist_ok=True)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
@@ -174,6 +191,7 @@ def train_gan(gan, dataset, epochs=500, batch_size=64, save_every=25,
 
 def save_checkpoint(gan, variant, output_dir, epoch="last"):
     """Save model and optimizer state dicts to output_dir."""
+    _require_torch("save_checkpoint")
     os.makedirs(output_dir, exist_ok=True)
 
     torch.save(gan.generator.state_dict(),
@@ -201,6 +219,7 @@ def save_checkpoint(gan, variant, output_dir, epoch="last"):
 
 def load_checkpoint(gan, output_dir, epoch="last", device="cpu"):
     """Load model and optimizer state dicts from output_dir into a GAN instance."""
+    _require_torch("load_checkpoint")
     def _load(path):
         return torch.load(path, map_location=device)
 
