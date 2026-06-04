@@ -41,6 +41,7 @@ where = ["src"]
 
 [tool.setuptools_scm]
 write_to = "src/glitchgan/_version.py"
+local_scheme = "no-local-version"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -21,6 +21,7 @@ build/
 .eggs/
 *.egg
 src/cdvgan/_version.py
+src/glitchgan/_version.py
 
 # Jupyter
 .ipynb_checkpoints/
