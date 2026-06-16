@@ -1,5 +1,7 @@
 # GlitchGAN
 
+[![Documentation](https://img.shields.io/badge/docs-readthedocs-blue)](https://glitchgan.readthedocs.io/)
+
 Conditional Dual-discriminator Variational GAN (cDVGAN) for synthesising LIGO gravitational-wave glitch signals. Trained on seven Gravity Spy glitch classes from the O3 observing run.
 
 ## Overview
