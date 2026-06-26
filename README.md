@@ -44,7 +44,8 @@ The environment installs TensorFlow, Keras 3, GWpy, PyCBC, umap-learn, and Gravi
 
 ## Data
 
-The training dataset (DeepExtractor reconstructions of seven LIGO O3 glitch classes,
+The training dataset (DeepExtractor reconstructions of seven LIGO O3 glitch classes —
+Blip, Fast Scattering, Koi Fish, Low Frequency Burst, Scattered Light, Tomte, Whistle —
 35,000 samples) is hosted on HuggingFace:
 [tomdooney/deepextractor-glitch-reconstructions](https://huggingface.co/datasets/tomdooney/deepextractor-glitch-reconstructions)
 

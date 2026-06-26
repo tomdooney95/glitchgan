@@ -4,7 +4,8 @@ Training
 Data preparation
 ----------------
 
-Download the training dataset (DeepExtractor reconstructions of seven LIGO O3 glitch classes)
+Download the training dataset (DeepExtractor reconstructions of seven LIGO O3 glitch classes:
+Blip, Fast Scattering, Koi Fish, Low Frequency Burst, Scattered Light, Tomte, and Whistle)
 directly from HuggingFace using the built-in helper:
 
 .. code-block:: python
