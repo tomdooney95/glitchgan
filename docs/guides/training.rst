@@ -4,15 +4,38 @@ Training
 Data preparation
 ----------------
 
-Download the GravitySpy balanced dataset and place it in ``data/``:
+Download the training dataset (DeepExtractor reconstructions of seven LIGO O3 glitch classes)
+directly from HuggingFace using the built-in helper:
+
+.. code-block:: python
+
+   from glitchgan import download_data
+
+   paths = download_data("data/")
+   # paths["samples"]     → data/glitch_GAN_samples_scaled_balanced.npy
+   # paths["labels"]      → data/glitch_GAN_labels_balanced.npy
+   # paths["label_order"] → data/glitch_GAN_label_order.npy
+
+To also download the time-derivative array required for cDVGAN training (~2.1 GB extra):
+
+.. code-block:: python
+
+   paths = download_data("data/", include_derivatives=True)
+   # paths["derivatives"] → data/glitch_GAN_deriv_samples_balanced.npy
+
+The dataset is hosted at
+`tomdooney/deepextractor-glitch-reconstructions <https://huggingface.co/datasets/tomdooney/deepextractor-glitch-reconstructions>`_
+on HuggingFace (35,000 samples, 7 classes, 8192 samples at 4096 Hz).
+
+Expected directory layout after download:
 
 .. code-block:: text
 
    data/
    ├── glitch_GAN_samples_scaled_balanced.npy   # (35000, 8192) whitened waveforms
-   └── glitch_GAN_labels_balanced.npy            # (35000, 7)   one-hot class labels
-
-See the ``README`` for download instructions.
+   ├── glitch_GAN_labels_balanced.npy            # (35000, 7)   one-hot class labels
+   ├── glitch_GAN_label_order.npy                # (7,)         class name order
+   └── glitch_GAN_deriv_samples_balanced.npy     # (35000, 8191) derivatives (optional)
 
 Training a model
 ----------------

@@ -44,17 +44,32 @@ The environment installs TensorFlow, Keras 3, GWpy, PyCBC, umap-learn, and Gravi
 
 ## Data
 
-The training data (~2.3 GB) is not included in this repository.
+The training dataset (DeepExtractor reconstructions of seven LIGO O3 glitch classes,
+35,000 samples) is hosted on HuggingFace:
+[tomdooney/deepextractor-glitch-reconstructions](https://huggingface.co/datasets/tomdooney/deepextractor-glitch-reconstructions)
 
-**Download from Zenodo:** *(link TBD — will be added before publication)*
+Download it with the built-in helper:
 
-Place the downloaded files in `data/`:
+```python
+from glitchgan import download_data
+
+paths = download_data("data/")
+```
+
+Or to also fetch the derivative array needed for cDVGAN training:
+
+```python
+paths = download_data("data/", include_derivatives=True)
+```
+
+This places the following files in `data/`:
 
 ```
 data/
-├── glitch_GAN_samples_scaled_balanced.npy   # (N, 8192) float32 signals
-├── glitch_GAN_labels_balanced.npy           # (N, 7) one-hot labels
-└── glitch_GAN_label_order.npy               # class name ordering
+├── glitch_GAN_samples_scaled_balanced.npy   # (35000, 8192) whitened waveforms
+├── glitch_GAN_labels_balanced.npy           # (35000, 7)    one-hot class labels
+├── glitch_GAN_label_order.npy               # (7,)          class name order
+└── glitch_GAN_deriv_samples_balanced.npy    # (35000, 8191) derivatives (optional)
 ```
 
 ## GravitySpy model
