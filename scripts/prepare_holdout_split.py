@@ -17,11 +17,32 @@ never seen during that model's training. This is intentionally a SEPARATE
 model/dataset from the main reported GlitchGAN (trained on 100% of
 available data) -- nothing about the main results changes.
 
+Source data: Compleet_set_snr15.npz (31,511 raw samples, physical-unit strain,
+string class labels) rather than the smaller 30,000-sample
+glitch_GAN_samples_scaled.npy -- confirmed to be the more complete raw pool
+(matches the ~31,500 total the main GlitchGAN training set was actually
+drawn from). Its X is NOT pre-scaled, so we apply the exact scaling rule
+used to build the actual training file
+(glitch_GAN_samples_scaled_balanced.npy, published on HuggingFace and
+confirmed to have exactly zero row-means for every sample/class):
+
+  1. Per-sample min-max scaling to [-1, 1]:
+     ``2 * (x - x.min()) / (x.max() - x.min()) - 1``
+     (confirmed exact, max diff ~4e-16, against the intermediate
+     pre-balancing glitch_GAN_samples_scaled.npy)
+  2. Subtract that same sample's own resulting mean (guaranteed to produce
+     exactly zero mean per row -- matches glitch_GAN_samples_scaled_balanced.npy,
+     the file that actually trained the reported model, exactly: every
+     class's row-means are 0.0000 there).
+
+No dataset-wide statistics are involved in either step, so this applies
+identically regardless of which raw pool a sample came from.
+
 Usage (run wherever has access to the raw CIT data and the glitchgan
 training environment):
 
     python scripts/prepare_holdout_split.py \\
-        --data-dir /path/to/cDVGAN_for_DeepExtractor/data \\
+        --source-npz /path/to/Compleet_set_snr15.npz \\
         --out-dir data_holdout90/ \\
         --holdout-out data_holdout90/holdout_real.npz
 """
@@ -33,16 +54,35 @@ import numpy as np
 
 TARGET_PER_CLASS = 5000  # matches the original *_balanced.npy convention (35000 / 7 classes)
 
+# Fixed class order, matching glitch_GAN_label_order.npy / LABEL_ORDER used
+# throughout the rest of this repo. Compleet_set_snr15.npz may contain other
+# GravitySpy classes beyond these seven (it's a broader "snr>=15" pool used
+# for more than just GlitchGAN) -- anything outside this list is dropped.
+LABEL_ORDER = [
+    "Blip", "Fast_Scattering", "Koi_Fish", "Low_Frequency_Burst",
+    "Scattered_Light", "Tomte", "Whistle",
+]
+
+
+def scale_rowwise(X):
+    """Per-sample min-max scaling to [-1, 1], then subtract that sample's own
+    resulting mean. Confirmed exact match to how the real training data
+    (glitch_GAN_samples_scaled_balanced.npy) was built -- see module
+    docstring."""
+    row_min = X.min(axis=1, keepdims=True)
+    row_max = X.max(axis=1, keepdims=True)
+    mm = 2 * (X - row_min) / (row_max - row_min) - 1
+    return mm - mm.mean(axis=1, keepdims=True)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Stratified 90/10 real-data split + rebalancing of the 90% training pool.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--data-dir", type=str, required=True,
-                        help="Directory containing the RAW (unbalanced) "
-                             "glitch_GAN_samples_scaled.npy / glitch_GAN_labels.npy / "
-                             "glitch_GAN_label_order.npy files.")
+    parser.add_argument("--source-npz", type=str, required=True,
+                        help="Path to Compleet_set_snr15.npz -- raw (unscaled), physical-unit "
+                             "strain in 'X' (N, 8192) and string class labels in 'y' (N,).")
     parser.add_argument("--out-dir", type=str, required=True,
                         help="Where to write the rebalanced 90%% training pool, using the "
                              "same filenames glitchgan.tf.train expects "
@@ -90,14 +130,31 @@ def main():
     os.makedirs(os.path.dirname(args.holdout_out) or ".", exist_ok=True)
 
     print("Loading raw data...")
-    X = np.load(os.path.join(args.data_dir, "glitch_GAN_samples_scaled.npy"))
-    y_onehot = np.load(os.path.join(args.data_dir, "glitch_GAN_labels.npy"))
-    label_order = np.load(os.path.join(args.data_dir, "glitch_GAN_label_order.npy"), allow_pickle=True)
-    y_idx = np.argmax(y_onehot, axis=1)
-    print(f"  X: {X.shape}  y_onehot: {y_onehot.shape}  label_order: {list(label_order)}")
+    d = np.load(args.source_npz, allow_pickle=True)
+    X_raw_all = d["X"]
+    y_str_all = d["y"]
+    print(f"  Loaded: X={X_raw_all.shape}  y={y_str_all.shape}")
+
+    # Restrict to the 7 GlitchGAN classes (Compleet_set_snr15.npz may contain
+    # other GravitySpy classes not used here).
+    label_order = np.array(LABEL_ORDER)
+    keep_mask = np.isin(y_str_all, label_order)
+    n_dropped = (~keep_mask).sum()
+    if n_dropped:
+        dropped_classes = sorted(set(y_str_all[~keep_mask]))
+        print(f"  Dropping {n_dropped} samples outside the 7 GlitchGAN classes "
+             f"(other classes present: {dropped_classes})")
+    X_raw = X_raw_all[keep_mask]
+    y_str = y_str_all[keep_mask]
+    y_idx = np.array([LABEL_ORDER.index(lbl) for lbl in y_str])
 
     for c, name in enumerate(label_order):
         print(f"  raw count [{name}]: {(y_idx == c).sum()}")
+
+    print("\nApplying confirmed scaling (per-sample min-max to [-1,1], then subtract "
+         "that sample's own mean)...")
+    X = scale_rowwise(X_raw)
+    y_onehot = np.eye(len(LABEL_ORDER), dtype=np.float64)[y_idx]
 
     print(f"\nSplitting {args.test_frac:.0%} held out per class (seed={args.seed})...")
     train_idx, test_idx = stratified_split(y_idx, args.test_frac, rng)
