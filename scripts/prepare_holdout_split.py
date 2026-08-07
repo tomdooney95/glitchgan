@@ -160,7 +160,10 @@ def main():
     train_idx, test_idx = stratified_split(y_idx, args.test_frac, rng)
     overlap = np.intersect1d(train_idx, test_idx)
     assert len(overlap) == 0, f"BUG: {len(overlap)} indices in both train and holdout"
-    print(f"  train pool: {len(train_idx)}  held-out: {len(test_idx)}")
+    y_idx_train, y_idx_test = y_idx[train_idx], y_idx[test_idx]
+    for c, name in enumerate(label_order):
+        print(f"  [{name}] train: {(y_idx_train == c).sum()}  held-out: {(y_idx_test == c).sum()}")
+    print(f"  TOTAL  train pool: {len(train_idx)}  held-out: {len(test_idx)}")
 
     print(f"\nRebalancing training pool to {args.target_per_class}/class...")
     y_idx_train_pool = y_idx[train_idx]
