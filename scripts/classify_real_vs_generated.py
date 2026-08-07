@@ -22,12 +22,20 @@ Pipeline:
 Usage:
     python scripts/classify_real_vs_generated.py \\
         --holdout-npz data_holdout90/holdout_real.npz \\
-        --generator-checkpoint GAN_outputs_holdout90/cDVGAN/generator_final.keras \\
-        --epochs 30
+        --generator-checkpoint GAN_outputs_holdout90/cDVGAN/generator_final.keras
 """
 
 import argparse
 import os
+
+# Shared LDG login/dev nodes (e.g. ldas-pcdev*) cap the number of threads a
+# user process may spawn well below TF's default tf.data private-threadpool
+# sizing (~1 thread/core), which crashes with a pthread_create() EAGAIN
+# failure. Cap it conservatively before TF is ever imported; a caller that
+# wants more (e.g. on a GPU compute node) can still override via env.
+os.environ.setdefault("TF_NUM_INTEROP_THREADS", "2")
+os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "2")
+os.environ.setdefault("OMP_NUM_THREADS", "2")
 
 import numpy as np
 from statsmodels.stats.proportion import proportion_confint
@@ -48,10 +56,18 @@ def parse_args():
                              "GAN_outputs_holdout90/cDVGAN/generator_final.keras.")
     parser.add_argument("--noise-dim", type=int, default=100)
     parser.add_argument("--num-classes", type=int, default=7)
-    parser.add_argument("--classifier-test-frac", type=float, default=0.2,
-                        help="Fraction of the real+fake pool held out for the "
-                             "CLASSIFIER's own evaluation (separate from the GAN holdout).")
-    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--train-frac", type=float, default=0.7,
+                        help="Fraction of the real+fake pool used for the CLASSIFIER's own "
+                             "training split (separate from the GAN holdout). Stratified by "
+                             "class AND real/fake domain.")
+    parser.add_argument("--val-frac", type=float, default=0.1,
+                        help="Fraction of the real+fake pool used for the CLASSIFIER's own "
+                             "validation split. Remainder (1 - train_frac - val_frac) is test.")
+    parser.add_argument("--epochs", type=int, default=200,
+                        help="Max epochs; early stopping on val_loss (see --patience) will "
+                             "typically halt well before this.")
+    parser.add_argument("--patience", type=int, default=10,
+                        help="Early-stopping patience on val_loss, restoring the best weights.")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-dir", type=str, default="real_vs_fake_results")
@@ -92,6 +108,22 @@ def load_generator(checkpoint_path):
     )
 
 
+def stratified_train_val_test_split(group_keys, train_frac, val_frac, rng):
+    """Per-(class, domain) group split into train/val/test, so both the class
+    imbalance in the held-out real data (277-498 per class) and the real/fake
+    domain are preserved in every split, not just the pooled total."""
+    train_idx, val_idx, test_idx = [], [], []
+    for key in np.unique(group_keys):
+        idx = rng.permutation(np.where(group_keys == key)[0])
+        n = len(idx)
+        n_train = int(round(n * train_frac))
+        n_val = int(round(n * val_frac))
+        train_idx.append(idx[:n_train])
+        val_idx.append(idx[n_train:n_train + n_val])
+        test_idx.append(idx[n_train + n_val:])
+    return np.concatenate(train_idx), np.concatenate(val_idx), np.concatenate(test_idx)
+
+
 def generate_fake_samples_for_class(generator, n, class_idx, num_classes, noise_dim, rng):
     """Vertex (one-hot) class-conditioned generation for a single class,
     matching glitchgan.tf.utils.generate_examples()'s convention."""
@@ -122,32 +154,51 @@ def main():
 
     print("Generating matching fake samples (same per-class count as held-out real)...")
     fake_signals_parts = []
+    fake_class_idx_parts = []
     for c, name in enumerate(label_order):
         n = int((y_real_idx == c).sum())
         sig = generate_fake_samples_for_class(generator, n, c, args.num_classes, args.noise_dim, rng)
         fake_signals_parts.append(sig)
+        fake_class_idx_parts.append(np.full(n, c))
         print(f"    {name}: {n}")
     X_fake = np.concatenate(fake_signals_parts)
+    class_idx_fake = np.concatenate(fake_class_idx_parts)
     print(f"  Generated fake: {X_fake.shape}")
 
     # --- Build the real(1) vs fake(0) pool ------------------------------------
     X_all = np.concatenate([X_real, X_fake]).astype(np.float32)
     y_all = np.concatenate([np.ones(len(X_real)), np.zeros(len(X_fake))]).astype(np.float32)
+    class_idx_all = np.concatenate([y_real_idx, class_idx_fake])
 
-    perm = rng.permutation(len(X_all))
-    X_all, y_all = X_all[perm], y_all[perm]
+    # Stratify by (class, domain) jointly -- class_idx in [0, num_classes) and
+    # domain in {0, 1}, so this encoding is collision-free.
+    group_keys = class_idx_all.astype(int) * 2 + y_all.astype(int)
+    train_idx, val_idx, test_idx = stratified_train_val_test_split(
+        group_keys, args.train_frac, args.val_frac, rng)
 
-    n_test = int(round(len(X_all) * args.classifier_test_frac))
-    X_test, y_test = X_all[:n_test], y_all[:n_test]
-    X_train, y_train = X_all[n_test:], y_all[n_test:]
-    print(f"\nClassifier train/test split: {len(X_train)} train, {len(X_test)} test "
-         f"(test_frac={args.classifier_test_frac})")
+    X_train, y_train = X_all[train_idx], y_all[train_idx]
+    X_val, y_val = X_all[val_idx], y_all[val_idx]
+    X_test, y_test = X_all[test_idx], y_all[test_idx]
+    print(f"\nClassifier train/val/test split (stratified by class + domain): "
+         f"{len(X_train)} train, {len(X_val)} val, {len(X_test)} test "
+         f"(train_frac={args.train_frac}, val_frac={args.val_frac})")
 
     print("\nTraining real-vs-fake classifier...")
+    import keras
+
     clf = build_classifier(input_length=X_all.shape[-1])
     clf.summary()
-    clf.fit(X_train, y_train, validation_split=0.1, epochs=args.epochs,
-           batch_size=args.batch_size, verbose=2)
+    early_stop = keras.callbacks.EarlyStopping(
+        monitor="val_loss", patience=args.patience, restore_best_weights=True)
+    history = clf.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=args.epochs,
+                      batch_size=args.batch_size, callbacks=[early_stop], verbose=2)
+    n_ran = len(history.history["loss"])
+    if n_ran < args.epochs:
+        print(f"Early stopping triggered after {n_ran} epochs "
+             f"(best weights restored, patience={args.patience}).")
+    else:
+        print(f"Ran the full {n_ran} epochs without early stopping "
+             f"-- consider raising --epochs if val_loss was still improving.")
 
     print("\nEvaluating on held-out classifier test split...")
     y_pred_prob = clf.predict(X_test, verbose=0).ravel()
