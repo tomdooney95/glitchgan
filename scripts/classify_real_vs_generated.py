@@ -40,6 +40,8 @@ os.environ.setdefault("OMP_NUM_THREADS", "2")
 import numpy as np
 from statsmodels.stats.proportion import proportion_confint
 
+from prepare_holdout_split import scale_rowwise
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -164,6 +166,16 @@ def main():
     X_fake = np.concatenate(fake_signals_parts)
     class_idx_fake = np.concatenate(fake_class_idx_parts)
     print(f"  Generated fake: {X_fake.shape}")
+
+    # Real samples went through prepare_holdout_split.py's scale_rowwise() --
+    # per-sample min-max to [-1, 1] then subtracting that sample's own mean,
+    # which guarantees exactly zero row-mean. Raw generator output has no
+    # equivalent enforced normalization, so without this the classifier could
+    # trivially separate the two domains on row-mean/min/max alone rather than
+    # on any genuine morphological difference.
+    print("Applying the same row-wise min-max + mean-subtract scaling used for the "
+         "real data to the generated samples...")
+    X_fake = scale_rowwise(X_fake)
 
     # --- Build the real(1) vs fake(0) pool ------------------------------------
     X_all = np.concatenate([X_real, X_fake]).astype(np.float32)
