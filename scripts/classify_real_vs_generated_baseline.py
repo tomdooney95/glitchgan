@@ -74,6 +74,9 @@ def main():
     os.makedirs(args.out_dir, exist_ok=True)
     rng = np.random.default_rng(args.seed)
 
+    print(f"Seed: {args.seed}")
+    print(f"Generator checkpoint: {args.generator_checkpoint}")
+
     print("Loading held-out real data...")
     d = np.load(args.holdout_npz, allow_pickle=True)
     X_real = d["X"]
@@ -117,7 +120,7 @@ def main():
 
     best_C, best_val_acc, best_clf = None, -1.0, None
     for C in C_grid:
-        clf_c = LogisticRegression(C=C, max_iter=2000)
+        clf_c = LogisticRegression(C=C, max_iter=2000, random_state=args.seed)
         clf_c.fit(X_train, y_train)
         train_acc_c = clf_c.score(X_train, y_train)
         val_acc_c = clf_c.score(X_val, y_val)
@@ -160,6 +163,7 @@ def main():
         y_test=y_test, y_pred=y_pred, accuracy=acc, ci_lo=lo, ci_hi=hi, n=n, correct=correct,
         train_acc=train_acc, val_acc=val_acc, best_C=best_C,
         coef=clf.coef_, intercept=clf.intercept_,
+        seed=args.seed, generator_checkpoint=args.generator_checkpoint,
     )
     print(f"\nSaved: {os.path.join(args.out_dir, 'real_vs_fake_baseline_results.npz')}")
 

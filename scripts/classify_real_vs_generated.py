@@ -139,7 +139,21 @@ def generate_fake_samples_for_class(generator, n, class_idx, num_classes, noise_
 def main():
     args = parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
+
+    # Seed everything before any TF/Keras op runs: numpy (used here for noise
+    # vectors and the train/val/test split), and Keras's own global state
+    # (weight init, dropout, and model.fit's internal batch shuffling), which
+    # the numpy rng above does not control. enable_op_determinism additionally
+    # forces deterministic GPU kernels (cuDNN convs are non-deterministic by
+    # default for performance) at some speed cost.
+    import keras
+    keras.utils.set_random_seed(args.seed)
+    import tensorflow as tf
+    tf.config.experimental.enable_op_determinism()
     rng = np.random.default_rng(args.seed)
+
+    print(f"Seed: {args.seed}")
+    print(f"Generator checkpoint: {args.generator_checkpoint}")
 
     print("Loading held-out real data...")
     d = np.load(args.holdout_npz, allow_pickle=True)
@@ -196,8 +210,6 @@ def main():
          f"(train_frac={args.train_frac}, val_frac={args.val_frac})")
 
     print("\nTraining real-vs-fake classifier...")
-    import keras
-
     clf = build_classifier(input_length=X_all.shape[-1])
     clf.summary()
     early_stop = keras.callbacks.EarlyStopping(
@@ -230,6 +242,7 @@ def main():
         os.path.join(args.out_dir, "real_vs_fake_results.npz"),
         y_test=y_test, y_pred_prob=y_pred_prob, accuracy=acc,
         ci_lo=lo, ci_hi=hi, n=n, correct=correct,
+        seed=args.seed, generator_checkpoint=args.generator_checkpoint,
     )
     print(f"\nSaved: {os.path.join(args.out_dir, 'real_vs_fake_results.npz')}")
 
