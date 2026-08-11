@@ -59,10 +59,11 @@ def parse_args():
     parser.add_argument("--num-classes", type=int, default=7)
     parser.add_argument("--train-frac", type=float, default=0.7)
     parser.add_argument("--val-frac", type=float, default=0.1)
-    parser.add_argument("--C", type=float, default=1.0,
-                        help="Inverse L2 regularization strength (scikit-learn convention; "
-                             "smaller = stronger regularization). Default is sklearn's own "
-                             "default, not tuned toward any particular result.")
+    parser.add_argument("--C-grid", type=str, default="0.0001,0.001,0.01,0.1,1.0,10.0",
+                        help="Comma-separated grid of inverse L2 regularization strengths "
+                             "(scikit-learn convention; smaller = stronger regularization). "
+                             "The value maximizing VALIDATION accuracy is selected -- the test "
+                             "set is never used for this choice.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-dir", type=str, default="real_vs_fake_results_baseline")
     return parser.parse_args()
@@ -110,10 +111,24 @@ def main():
     print(f"\nSplit (stratified by class + domain): "
          f"{len(X_train)} train, {len(X_val)} val, {len(X_test)} test")
 
-    print(f"\nFitting L2-regularized logistic regression (C={args.C}) directly on the "
-         f"raw {X_train.shape[-1]}-sample waveform...")
-    clf = LogisticRegression(C=args.C, max_iter=2000, penalty="l2")
-    clf.fit(X_train, y_train)
+    C_grid = [float(c) for c in args.C_grid.split(",")]
+    print(f"\nSweeping L2 regularization strength over C in {C_grid}, selecting by "
+         f"validation accuracy (test set untouched)...")
+
+    best_C, best_val_acc, best_clf = None, -1.0, None
+    for C in C_grid:
+        clf_c = LogisticRegression(C=C, max_iter=2000)
+        clf_c.fit(X_train, y_train)
+        train_acc_c = clf_c.score(X_train, y_train)
+        val_acc_c = clf_c.score(X_val, y_val)
+        marker = ""
+        if val_acc_c > best_val_acc:
+            best_C, best_val_acc, best_clf = C, val_acc_c, clf_c
+            marker = "  <- best so far"
+        print(f"  C={C:<10g} train_acc={train_acc_c:.3f}  val_acc={val_acc_c:.3f}{marker}")
+
+    clf = best_clf
+    print(f"\nSelected C={best_C} (highest validation accuracy: {best_val_acc:.3f})")
 
     train_acc = clf.score(X_train, y_train)
     val_acc = clf.score(X_val, y_val)
@@ -139,7 +154,8 @@ def main():
     np.savez(
         os.path.join(args.out_dir, "real_vs_fake_baseline_results.npz"),
         y_test=y_test, y_pred=y_pred, accuracy=acc, ci_lo=lo, ci_hi=hi, n=n, correct=correct,
-        train_acc=train_acc, val_acc=val_acc, coef=clf.coef_, intercept=clf.intercept_,
+        train_acc=train_acc, val_acc=val_acc, best_C=best_C,
+        coef=clf.coef_, intercept=clf.intercept_,
     )
     print(f"\nSaved: {os.path.join(args.out_dir, 'real_vs_fake_baseline_results.npz')}")
 
