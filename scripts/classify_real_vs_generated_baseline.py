@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument("--num-classes", type=int, default=7)
     parser.add_argument("--train-frac", type=float, default=0.7)
     parser.add_argument("--val-frac", type=float, default=0.1)
-    parser.add_argument("--C-grid", type=str, default="0.0001,0.001,0.01,0.1,1.0,10.0",
+    parser.add_argument("--C-grid", type=str, default="0.0001,0.001,0.01,0.1,1.0,10.0,100.0,1000.0",
                         help="Comma-separated grid of inverse L2 regularization strengths "
                              "(scikit-learn convention; smaller = stronger regularization). "
                              "The value maximizing VALIDATION accuracy is selected -- the test "
@@ -129,6 +129,10 @@ def main():
 
     clf = best_clf
     print(f"\nSelected C={best_C} (highest validation accuracy: {best_val_acc:.3f})")
+    if best_C == max(C_grid):
+        print(f"WARNING: selected C is the largest value in --C-grid -- validation accuracy "
+             f"may still be rising beyond this range. Consider extending --C-grid before "
+             f"trusting this as the linear model's true ceiling.")
 
     train_acc = clf.score(X_train, y_train)
     val_acc = clf.score(X_val, y_val)
