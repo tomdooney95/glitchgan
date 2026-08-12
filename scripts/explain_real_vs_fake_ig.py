@@ -128,32 +128,50 @@ def main():
     )
     print(f"Saved: {os.path.join(args.out_dir, 'integrated_gradients.npz')}")
 
-    print("Plotting waveform + attribution overlays...")
+    print("Plotting waveforms colored by attribution value...")
+    from matplotlib.collections import LineCollection
+    from matplotlib.colors import TwoSlopeNorm
+
     n_rows = len(real_examples) + len(fake_examples)
-    fig, axes = plt.subplots(n_rows, 1, figsize=(10, 2.2 * n_rows), sharex=True)
+    fig, axes = plt.subplots(n_rows, 1, figsize=(10, 2.0 * n_rows), sharex=True)
     if n_rows == 1:
         axes = [axes]
 
-    def plot_row(ax, x, ig, title):
+    # Shared color scale across all panels so blue/red intensity is directly
+    # comparable between real and fake examples, not auto-scaled per panel.
+    all_ig = np.concatenate([real_ig.ravel(), fake_ig.ravel()])
+    vmax = np.abs(all_ig).max()
+    norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+    cmap = "bwr"  # blue: pushes prediction toward "real"; red: pushes toward "fake"
+
+    def plot_colored_waveform(ax, x, ig, title):
         t = np.arange(len(x))
-        ax.plot(t, x, color="black", lw=0.8, label="waveform")
-        ax2 = ax.twinx()
-        ax2.plot(t, ig, color="crimson", lw=0.6, alpha=0.8, label="IG attribution")
-        ax2.axhline(0, color="crimson", lw=0.3, ls="--", alpha=0.5)
+        points = np.array([t, x]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        seg_vals = (ig[:-1] + ig[1:]) / 2.0
+        lc = LineCollection(segments, cmap=cmap, norm=norm)
+        lc.set_array(seg_vals)
+        lc.set_linewidth(1.2)
+        ax.add_collection(lc)
+        ax.set_xlim(t.min(), t.max())
+        pad = 0.1 * (x.max() - x.min() + 1e-8)
+        ax.set_ylim(x.min() - pad, x.max() + pad)
         ax.set_title(title, fontsize=10)
-        ax.set_ylabel("amp", fontsize=8)
-        ax2.set_ylabel("IG", fontsize=8, color="crimson")
+        ax.set_ylabel("amplitude", fontsize=8)
+        return lc
 
     row = 0
+    mappable = None
     for i in range(len(real_examples)):
-        plot_row(axes[row], real_examples[i], real_ig[i], f"REAL example {i}")
+        mappable = plot_colored_waveform(axes[row], real_examples[i], real_ig[i], f"REAL example {i}")
         row += 1
     for i in range(len(fake_examples)):
-        plot_row(axes[row], fake_examples[i], fake_ig[i], f"FAKE example {i}")
+        mappable = plot_colored_waveform(axes[row], fake_examples[i], fake_ig[i], f"FAKE example {i}")
         row += 1
 
     axes[-1].set_xlabel("time sample")
-    plt.tight_layout()
+    fig.colorbar(mappable, ax=axes, label="IG attribution (blue: toward real, red: toward fake)",
+                fraction=0.02, pad=0.02)
     fig_path = os.path.join(args.out_dir, "ig_overlay.pdf")
     fig.savefig(fig_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
