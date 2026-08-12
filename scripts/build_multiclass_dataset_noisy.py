@@ -1,41 +1,29 @@
 """
-Build the datasets for the 7-class multi-class glitch classification
-experiment: real (natural/imbalanced), real (bootstrap-balanced), real+fake
-(augmented to balance), and fake-only (balanced) training sets, all
-evaluated on the SAME fixed, leak-proof real validation/test split.
+Noise-injected version of build_multiclass_dataset.py: builds the same four
+7-class training-set variants (real natural/imbalanced, real bootstrap-
+balanced, real+fake augmented to balance, fake-only balanced) plus a shared
+real val/test split, but with every sample -- real and fake alike -- scaled
+to its class's mean SNR (Table tab:injection_snr in the paper) and injected
+into an independent bilby aLIGO (default H1, O3 design PSD) whitened noise
+realization, using the same corrected SNR scaling as build_injected_dataset.py.
 
-Reuses the same real holdout set (data_holdout90/holdout_real.npz) used
-throughout the real-vs-fake experiments -- these 3,151 samples were never
-seen during training of the holdout-trained GlitchGAN, so it's safe to use
-here too without leakage.
+Ordering matters for the bootstrap/augmentation logic: the real training
+pool, validation, and test sets are each injected ONCE per sample before any
+balancing happens, so a bootstrap-duplicated sample (config 2) shares both
+its underlying real glitch AND its specific noise realization with the
+original -- the same duplication semantics as the clean-domain version, just
+now on noise-injected data. Freshly-generated fake samples (used to fill the
+augmentation deficit in config 3, and for all of config 4) are each injected
+into their own independent noise realization at generation time.
 
-Split 70/10/20, stratified by class, on this holdout set:
-  - 70% (~2,206 samples, class-imbalanced) is the real training pool.
-  - 10% (~316 samples, fixed) is the shared validation set, used identically
-    across all four training configurations for early stopping/model
-    selection, so results stay directly comparable across configs.
-  - 20% (~629 samples, fixed) is the shared test set, used identically
-    across all four configurations for final evaluation.
-
-Four training-set variants are built from the 70% real training pool, all
-targeting the same per-class count (the majority class's count in the train
-pool), so configs 2-4 are the same total size, differing only in composition:
-  1. real_natural        -- real training pool as-is (class-imbalanced).
-  2. real_balanced        -- real training pool, bootstrapped (oversampled
-     with replacement) per class up to the target.
-  3. real_fake_augmented -- real training pool, topped up with FRESH fake
-     samples (not real duplicates) per class up to the target.
-  4. fake_only            -- entirely synthetic, balanced to the target.
-
-Fake samples (both augmentation and fake-only) are scale_rowwise()-
-normalized, matching real data's own normalization, so no domain can be
-trivially separated by a normalization mismatch.
+classify_multiclass.py works unchanged on this dataset's output -- it just
+loads whichever named X_<config>/y_<config> arrays are present.
 
 Usage:
-    python scripts/build_multiclass_dataset.py \\
+    python scripts/build_multiclass_dataset_noisy.py \\
         --holdout-npz data_holdout90/holdout_real.npz \\
         --generator-checkpoint GAN_outputs_holdout90/cDVGAN/monitor/generator_210.keras \\
-        --out-npz multiclass_data/multiclass_datasets_epoch210.npz
+        --out-npz multiclass_data/multiclass_datasets_epoch210_noisy.npz
 """
 
 import argparse
@@ -47,19 +35,21 @@ os.environ.setdefault("OMP_NUM_THREADS", "2")
 
 import numpy as np
 
+from build_injected_dataset import MEAN_SNR_PER_CLASS, inject_batch
 from classify_real_vs_generated import (
     generate_fake_samples_for_class,
     load_generator,
     stratified_train_val_test_split,
 )
+from glitchgan.utils import whitened_snr_scaling
 from prepare_holdout_split import balance, scale_rowwise
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Build real/balanced/augmented/fake-only training sets for the "
-                     "7-class multi-class glitch classification experiment, all "
-                     "evaluated on the same fixed real val/test split.",
+        description="Build noise-injected real/balanced/augmented/fake-only training "
+                     "sets for the 7-class multi-class glitch classification experiment, "
+                     "all evaluated on the same fixed, noise-injected real val/test split.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--holdout-npz", type=str, required=True)
@@ -69,19 +59,27 @@ def parse_args():
     parser.add_argument("--train-frac", type=float, default=0.7)
     parser.add_argument("--val-frac", type=float, default=0.1)
     parser.add_argument("--target-per-class", type=int, default=None,
-                        help="Per-class sample count for the real_balanced, "
-                             "real_fake_augmented, and fake_only sets. Defaults to the "
-                             "majority class's count in the real training pool (the "
-                             "smallest apples-to-apples balancing target). Pass a larger "
-                             "value (e.g. 5000) to test whether more synthetic samples "
-                             "close the gap to real-trained accuracy -- note real_balanced "
-                             "then becomes a heavily-bootstrapped (repeated-real-samples) "
-                             "control at that size, and real_fake_augmented becomes "
-                             "increasingly fake-dominated as this grows past the real "
-                             "per-class counts.")
+                        help="Same override as build_multiclass_dataset.py -- defaults "
+                             "to the majority class's count in the real training pool.")
+    parser.add_argument("--ifo", type=str, default="H1")
+    parser.add_argument("--sample-rate", type=float, default=4096.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-npz", type=str, required=True)
     return parser.parse_args()
+
+
+def snr_scale_by_class(X, y_idx, label_order, sample_rate, snr_unit_correction):
+    """Rescale each row of X to its class's mean SNR (whitened-frame formula,
+    corrected for bilby's unit-time-domain-variance noise convention)."""
+    X_scaled = np.zeros_like(X, dtype=np.float32)
+    for c, name in enumerate(label_order):
+        snr = MEAN_SNR_PER_CLASS[name]
+        mask = y_idx == c
+        if mask.sum() == 0:
+            continue
+        X_scaled[mask] = whitened_snr_scaling(
+            X[mask], snr, srate=int(sample_rate)) / snr_unit_correction
+    return X_scaled
 
 
 def main():
@@ -91,13 +89,16 @@ def main():
 
     print(f"Seed: {args.seed}")
     print(f"Generator checkpoint: {args.generator_checkpoint}")
+    print(f"Detector: {args.ifo}  Sample rate: {args.sample_rate} Hz")
 
     print("Loading real holdout data...")
     d = np.load(args.holdout_npz, allow_pickle=True)
     X_real = d["X"]
     y_real_idx = np.argmax(d["y"], axis=1)
     label_order = list(d["label_order"])
-    print(f"  Held-out real: {X_real.shape}")
+    for name in label_order:
+        if name not in MEAN_SNR_PER_CLASS:
+            raise ValueError(f"No mean SNR entry for class '{name}'.")
 
     print(f"\nSplitting 70/10/20 stratified by class (seed={args.seed})...")
     train_idx, val_idx, test_idx = stratified_train_val_test_split(
@@ -106,7 +107,6 @@ def main():
     X_train_pool, y_train_pool = X_real[train_idx], y_real_idx[train_idx]
     X_val, y_val = X_real[val_idx], y_real_idx[val_idx]
     X_test, y_test = X_real[test_idx], y_real_idx[test_idx]
-
     for c, name in enumerate(label_order):
         print(f"  [{name}] train: {(y_train_pool == c).sum()}  "
              f"val: {(y_val == c).sum()}  test: {(y_test == c).sum()}")
@@ -121,19 +121,42 @@ def main():
         print(f"\nBalancing target (majority class count in train pool): {target}/class "
              f"({target * len(label_order)} total)")
 
-    # --- Config 1: real, natural (imbalanced) -------------------------------
-    X_real_natural, y_real_natural = X_train_pool.copy(), y_train_pool.copy()
+    snr_unit_correction = np.sqrt(args.sample_rate / 2.0)
 
-    # --- Config 2: real, bootstrap-balanced ---------------------------------
+    print("\nSNR-scaling and injecting the real train/val/test pools "
+         "(one noise realization per sample, before any balancing)...")
+    import bilby
+    ifo = bilby.gw.detector.get_empty_interferometer(args.ifo)  # PSD loaded once
+
+    X_train_pool_scaled = snr_scale_by_class(
+        X_train_pool, y_train_pool, label_order, args.sample_rate, snr_unit_correction)
+    X_train_pool_injected = inject_batch(X_train_pool_scaled, ifo, args.sample_rate, rng)
+
+    X_val_scaled = snr_scale_by_class(
+        X_val, y_val, label_order, args.sample_rate, snr_unit_correction)
+    X_val_injected = inject_batch(X_val_scaled, ifo, args.sample_rate, rng)
+
+    X_test_scaled = snr_scale_by_class(
+        X_test, y_test, label_order, args.sample_rate, snr_unit_correction)
+    X_test_injected = inject_batch(X_test_scaled, ifo, args.sample_rate, rng)
+
+    # --- Config 1: real, natural (imbalanced), noise-injected ---------------
+    X_real_natural = X_train_pool_injected.copy()
+    y_real_natural = y_train_pool.copy()
+
+    # --- Config 2: real, bootstrap-balanced (duplicates share their noise
+    #     realization with the original, same semantics as the clean version)
     balanced_idx = balance(y_train_pool, target, rng)
-    X_real_balanced = X_train_pool[balanced_idx]
+    X_real_balanced = X_train_pool_injected[balanced_idx]
     y_real_balanced = y_train_pool[balanced_idx]
 
-    # --- Config 3: real (natural) + fresh fake to fill the per-class deficit
+    # --- Config 3: real (natural, injected) + fresh fake (scaled + injected)
+    #     to fill the per-class deficit -----------------------------------
     print("\nLoading generator for fake-augmentation / fake-only sets...")
     generator = load_generator(args.generator_checkpoint)
 
-    aug_parts_X, aug_parts_y = [X_train_pool.copy()], [y_train_pool.copy()]
+    aug_parts_X = [X_train_pool_injected.copy()]
+    aug_parts_y = [y_train_pool.copy()]
     for c, name in enumerate(label_order):
         n_real_c = int((y_train_pool == c).sum())
         deficit = target - n_real_c
@@ -141,6 +164,10 @@ def main():
             fake_c = generate_fake_samples_for_class(
                 generator, deficit, c, args.num_classes, args.noise_dim, rng)
             fake_c = scale_rowwise(fake_c)
+            fake_c = whitened_snr_scaling(
+                fake_c, MEAN_SNR_PER_CLASS[name], srate=int(args.sample_rate)
+            ) / snr_unit_correction
+            fake_c = inject_batch(fake_c, ifo, args.sample_rate, rng)
             aug_parts_X.append(fake_c)
             aug_parts_y.append(np.full(deficit, c))
         print(f"  [{name}] augmented with {max(deficit, 0)} fake samples "
@@ -151,12 +178,16 @@ def main():
     X_real_fake_augmented = X_real_fake_augmented[perm]
     y_real_fake_augmented = y_real_fake_augmented[perm]
 
-    # --- Config 4: fake-only, balanced --------------------------------------
+    # --- Config 4: fake-only, balanced, scaled + injected -------------------
     fake_only_parts_X, fake_only_parts_y = [], []
     for c, name in enumerate(label_order):
         fake_c = generate_fake_samples_for_class(
             generator, target, c, args.num_classes, args.noise_dim, rng)
         fake_c = scale_rowwise(fake_c)
+        fake_c = whitened_snr_scaling(
+            fake_c, MEAN_SNR_PER_CLASS[name], srate=int(args.sample_rate)
+        ) / snr_unit_correction
+        fake_c = inject_batch(fake_c, ifo, args.sample_rate, rng)
         fake_only_parts_X.append(fake_c)
         fake_only_parts_y.append(np.full(target, c))
     X_fake_only = np.concatenate(fake_only_parts_X)
@@ -170,8 +201,8 @@ def main():
     print(f"  real_balanced:       {len(X_real_balanced)}")
     print(f"  real_fake_augmented: {len(X_real_fake_augmented)}")
     print(f"  fake_only:           {len(X_fake_only)}")
-    print(f"  (shared) val:        {len(X_val)}")
-    print(f"  (shared) test:       {len(X_test)}")
+    print(f"  (shared) val:        {len(X_val_injected)}")
+    print(f"  (shared) test:       {len(X_test_injected)}")
 
     np.savez(
         args.out_npz,
@@ -179,10 +210,12 @@ def main():
         X_real_balanced=X_real_balanced, y_real_balanced=y_real_balanced,
         X_real_fake_augmented=X_real_fake_augmented, y_real_fake_augmented=y_real_fake_augmented,
         X_fake_only=X_fake_only, y_fake_only=y_fake_only,
-        X_val=X_val, y_val=y_val,
-        X_test=X_test, y_test=y_test,
+        X_val=X_val_injected, y_val=y_val,
+        X_test=X_test_injected, y_test=y_test,
         label_order=np.array(label_order), target_per_class=target,
+        mean_snr_per_class=np.array([MEAN_SNR_PER_CLASS[n] for n in label_order]),
         seed=args.seed, generator_checkpoint=args.generator_checkpoint,
+        ifo=args.ifo, sample_rate=args.sample_rate,
     )
     print(f"\nSaved: {args.out_npz}")
 
