@@ -126,6 +126,14 @@ def main():
     print("Applying scale_rowwise() to generated samples (matching real data's scaling)...")
     X_fake = scale_rowwise(X_fake)
 
+    # whitened_snr_scaling() assumes a flat PSD of exactly 1 (SNR^2 = 4*df*sum|h(f)|^2),
+    # but bilby's whitened_time_domain_strain has unit TIME-DOMAIN variance, which
+    # corresponds to a flat one-sided PSD of 2/fs, not 1. Reconciling the two:
+    # SNR_true = SNR_formula * sqrt(fs/2), so dividing by sqrt(fs/2) after scaling
+    # corrects the mismatch (a factor of ~45x at fs=4096) that was making injected
+    # glitches drown out the noise floor relative to their nominal target SNR.
+    snr_unit_correction = np.sqrt(args.sample_rate / 2.0)
+
     print("\nRescaling both domains to the same per-class mean SNR "
          "(Table tab:injection_snr in the paper)...")
     X_real_scaled = np.zeros_like(X_real, dtype=np.float32)
@@ -133,7 +141,7 @@ def main():
         snr = MEAN_SNR_PER_CLASS[name]
         mask = y_real_idx == c
         X_real_scaled[mask] = whitened_snr_scaling(
-            X_real[mask], snr, srate=int(args.sample_rate))
+            X_real[mask], snr, srate=int(args.sample_rate)) / snr_unit_correction
         print(f"  real  [{name}]: {mask.sum()} samples -> SNR {snr}")
 
     X_fake_scaled = np.zeros_like(X_fake, dtype=np.float32)
@@ -141,7 +149,7 @@ def main():
         snr = MEAN_SNR_PER_CLASS[name]
         mask = class_idx_fake == c
         X_fake_scaled[mask] = whitened_snr_scaling(
-            X_fake[mask], snr, srate=int(args.sample_rate))
+            X_fake[mask], snr, srate=int(args.sample_rate)) / snr_unit_correction
         print(f"  fake  [{name}]: {mask.sum()} samples -> SNR {snr}")
 
     print(f"\nInjecting into independent {args.ifo} bilby noise realizations...")
