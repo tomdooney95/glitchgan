@@ -146,7 +146,9 @@ def main():
     if n_rows == 1:
         axes = [axes]
 
-    cmap = "bwr"  # blue: pushes prediction toward "real"; red: pushes toward "fake"
+    cmap = "bwr_r"  # blue: pushes prediction toward "real"; red: pushes toward "fake"
+    # (bwr maps low->blue/high->red; positive IG increases P(real), so we need the
+    # reversed colormap for positive/high values to land on blue as the label states)
 
     def plot_colored_waveform(ax, x, ig, title):
         t = np.arange(len(x))
