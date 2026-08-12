@@ -128,7 +128,16 @@ def main():
     )
     print(f"Saved: {os.path.join(args.out_dir, 'integrated_gradients.npz')}")
 
-    print("Plotting waveforms colored by attribution value...")
+    print(f"\nAttribution magnitude by domain (mean/max |IG| per example):")
+    print(f"  real: mean={np.abs(real_ig).mean():.5f}  max={np.abs(real_ig).max():.5f}")
+    print(f"  fake: mean={np.abs(fake_ig).mean():.5f}  max={np.abs(fake_ig).max():.5f}")
+    print("A large real/fake gap here means the two domains sit at very different "
+         "distances from the zero-signal baseline in the model's output, per the "
+         "completeness axiom (sum(IG) = f(x) - f(baseline)) -- informative on its own, "
+         "and the reason the plot below normalizes each panel independently rather than "
+         "on a shared scale, so every example stays readable regardless of this gap.")
+
+    print("\nPlotting waveforms colored by attribution value (per-panel color scale)...")
     from matplotlib.collections import LineCollection
     from matplotlib.colors import TwoSlopeNorm
 
@@ -137,11 +146,6 @@ def main():
     if n_rows == 1:
         axes = [axes]
 
-    # Shared color scale across all panels so blue/red intensity is directly
-    # comparable between real and fake examples, not auto-scaled per panel.
-    all_ig = np.concatenate([real_ig.ravel(), fake_ig.ravel()])
-    vmax = np.abs(all_ig).max()
-    norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
     cmap = "bwr"  # blue: pushes prediction toward "real"; red: pushes toward "fake"
 
     def plot_colored_waveform(ax, x, ig, title):
@@ -149,6 +153,8 @@ def main():
         points = np.array([t, x]).T.reshape(-1, 1, 2)
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
         seg_vals = (ig[:-1] + ig[1:]) / 2.0
+        vmax = np.abs(ig).max()
+        norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax) if vmax > 0 else None
         lc = LineCollection(segments, cmap=cmap, norm=norm)
         lc.set_array(seg_vals)
         lc.set_linewidth(1.2)
@@ -156,22 +162,23 @@ def main():
         ax.set_xlim(t.min(), t.max())
         pad = 0.1 * (x.max() - x.min() + 1e-8)
         ax.set_ylim(x.min() - pad, x.max() + pad)
-        ax.set_title(title, fontsize=10)
+        ax.set_title(f"{title}  (max|IG|={vmax:.4f})", fontsize=10)
         ax.set_ylabel("amplitude", fontsize=8)
         return lc
 
     row = 0
-    mappable = None
     for i in range(len(real_examples)):
-        mappable = plot_colored_waveform(axes[row], real_examples[i], real_ig[i], f"REAL example {i}")
+        plot_colored_waveform(axes[row], real_examples[i], real_ig[i], f"REAL example {i}")
+        fig.colorbar(axes[row].collections[0], ax=axes[row], fraction=0.02, pad=0.02)
         row += 1
     for i in range(len(fake_examples)):
-        mappable = plot_colored_waveform(axes[row], fake_examples[i], fake_ig[i], f"FAKE example {i}")
+        plot_colored_waveform(axes[row], fake_examples[i], fake_ig[i], f"FAKE example {i}")
+        fig.colorbar(axes[row].collections[0], ax=axes[row], fraction=0.02, pad=0.02)
         row += 1
 
     axes[-1].set_xlabel("time sample")
-    fig.colorbar(mappable, ax=axes, label="IG attribution (blue: toward real, red: toward fake)",
-                fraction=0.02, pad=0.02)
+    fig.suptitle("IG attribution per example (blue: toward real, red: toward fake); "
+                "note each panel's colorbar has its own scale", fontsize=9, y=1.0)
     fig_path = os.path.join(args.out_dir, "ig_overlay.pdf")
     fig.savefig(fig_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
