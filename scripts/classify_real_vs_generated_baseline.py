@@ -134,8 +134,13 @@ def main():
     print(f"\nSelected C={best_C} (highest validation accuracy: {best_val_acc:.3f})")
     if best_C == max(C_grid):
         print(f"WARNING: selected C is the largest value in --C-grid -- validation accuracy "
-             f"may still be rising beyond this range. Consider extending --C-grid before "
-             f"trusting this as the linear model's true ceiling.")
+             f"may still be rising beyond this range. Consider extending --C-grid upward "
+             f"before trusting this as the linear model's true ceiling.")
+    elif best_C == min(C_grid):
+        print(f"WARNING: selected C is the smallest value in --C-grid -- validation accuracy "
+             f"may still be rising with even stronger regularization below this range. "
+             f"Consider extending --C-grid downward before trusting this as the linear "
+             f"model's true ceiling.")
 
     train_acc = clf.score(X_train, y_train)
     val_acc = clf.score(X_val, y_val)
