@@ -126,14 +126,23 @@ def stratified_train_val_test_split(group_keys, train_frac, val_frac, rng):
     return np.concatenate(train_idx), np.concatenate(val_idx), np.concatenate(test_idx)
 
 
-def generate_fake_samples_for_class(generator, n, class_idx, num_classes, noise_dim, rng):
+def generate_fake_samples_for_class(generator, n, class_idx, num_classes, noise_dim, rng,
+                                    batch_size=500):
     """Vertex (one-hot) class-conditioned generation for a single class,
-    matching glitchgan.tf.utils.generate_examples()'s convention."""
-    noise = rng.standard_normal((n, noise_dim)).astype(np.float32)
-    class_vec = np.zeros((n, num_classes), dtype=np.float32)
-    class_vec[:, class_idx] = 1.0
-    signals = generator([noise, class_vec], training=False).numpy()
-    return signals
+    matching glitchgan.tf.utils.generate_examples()'s convention. Generates in
+    chunks of at most batch_size -- a single forward pass at large n (several
+    thousand) can OOM the GPU on intermediate conv activations, even though
+    the model itself is small."""
+    parts = []
+    remaining = n
+    while remaining > 0:
+        this_batch = min(batch_size, remaining)
+        noise = rng.standard_normal((this_batch, noise_dim)).astype(np.float32)
+        class_vec = np.zeros((this_batch, num_classes), dtype=np.float32)
+        class_vec[:, class_idx] = 1.0
+        parts.append(generator([noise, class_vec], training=False).numpy())
+        remaining -= this_batch
+    return np.concatenate(parts, axis=0)
 
 
 def main():
