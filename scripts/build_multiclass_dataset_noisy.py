@@ -122,7 +122,8 @@ def main():
         if name not in MEAN_SNR_PER_CLASS:
             raise ValueError(f"No mean SNR entry for class '{name}'.")
 
-    print(f"\nSplitting 70/10/20 stratified by class (seed={args.seed})...")
+    print(f"\nSplitting {args.train_frac:.0%}/{args.val_frac:.0%}/"
+         f"{1 - args.train_frac - args.val_frac:.0%} stratified by class (seed={args.seed})...")
     train_idx, val_idx, test_idx = stratified_train_val_test_split(
         y_real_idx, args.train_frac, args.val_frac, rng)
 
