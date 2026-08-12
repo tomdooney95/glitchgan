@@ -246,6 +246,10 @@ def main():
     )
     print(f"\nSaved: {os.path.join(args.out_dir, 'real_vs_fake_results.npz')}")
 
+    clf_path = os.path.join(args.out_dir, "classifier.keras")
+    clf.save(clf_path)
+    print(f"Saved trained classifier: {clf_path}")
+
 
 if __name__ == "__main__":
     main()
