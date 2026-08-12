@@ -40,6 +40,7 @@ import numpy as np
 from classify_real_vs_generated import generate_fake_samples_for_class, load_generator
 from glitchgan.utils import whitened_snr_scaling
 from prepare_holdout_split import scale_rowwise
+from real_snr_distribution import load_real_snr_per_class, sample_snr
 
 # Mean SNR per class, from Table tab:injection_snr in the paper (used there
 # for the Gravity Spy synthetic-glitch validation injections).
@@ -67,6 +68,20 @@ def parse_args():
     parser.add_argument("--num-classes", type=int, default=7)
     parser.add_argument("--ifo", type=str, default="H1")
     parser.add_argument("--sample-rate", type=float, default=4096.0)
+    parser.add_argument("--snr-mode", type=str, default="sample", choices=["fixed", "sample"],
+                        help="'fixed' uses each class's single mean SNR (Table "
+                             "tab:injection_snr) for every sample. 'sample' draws each "
+                             "sample's own SNR independently from the empirical "
+                             "distribution of real per-class SNR values (--o3a-csv/"
+                             "--o3b-csv), which is heavily right-skewed -- more realistic "
+                             "than a single fixed value. Applied identically to both "
+                             "real and fake samples either way.")
+    parser.add_argument("--o3a-csv", type=str,
+                        default="/home/tom.dooney/GravitySpy_datasets/data_o3a_high_confidence.csv",
+                        help="Only used when --snr-mode sample.")
+    parser.add_argument("--o3b-csv", type=str,
+                        default="/home/tom.dooney/GravitySpy_datasets/data_o3b_high_confidence.csv",
+                        help="Only used when --snr-mode sample.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-npz", type=str, required=True)
     return parser.parse_args()
@@ -134,23 +149,39 @@ def main():
     # glitches drown out the noise floor relative to their nominal target SNR.
     snr_unit_correction = np.sqrt(args.sample_rate / 2.0)
 
-    print("\nRescaling both domains to the same per-class mean SNR "
-         "(Table tab:injection_snr in the paper)...")
+    real_snr_per_class = None
+    if args.snr_mode == "sample":
+        print(f"\nLoading empirical per-class SNR distributions from "
+             f"{args.o3a_csv} / {args.o3b_csv}...")
+        real_snr_per_class = load_real_snr_per_class(args.o3a_csv, args.o3b_csv, label_order)
+        for name in label_order:
+            snrs = real_snr_per_class[name]
+            print(f"  [{name}] n_available={len(snrs)}  mean={snrs.mean():.1f}  "
+                 f"median={np.median(snrs):.1f}")
+
+    def get_snr(name, n):
+        if args.snr_mode == "fixed":
+            return MEAN_SNR_PER_CLASS[name]
+        return sample_snr(real_snr_per_class, name, n, rng)
+
+    print(f"\nRescaling both domains to per-class SNR (mode={args.snr_mode})...")
     X_real_scaled = np.zeros_like(X_real, dtype=np.float32)
     for c, name in enumerate(label_order):
-        snr = MEAN_SNR_PER_CLASS[name]
         mask = y_real_idx == c
+        snr = get_snr(name, int(mask.sum()))
         X_real_scaled[mask] = whitened_snr_scaling(
             X_real[mask], snr, srate=int(args.sample_rate)) / snr_unit_correction
-        print(f"  real  [{name}]: {mask.sum()} samples -> SNR {snr}")
+        snr_desc = f"{snr}" if args.snr_mode == "fixed" else f"mean={np.mean(snr):.1f}"
+        print(f"  real  [{name}]: {mask.sum()} samples -> SNR {snr_desc}")
 
     X_fake_scaled = np.zeros_like(X_fake, dtype=np.float32)
     for c, name in enumerate(label_order):
-        snr = MEAN_SNR_PER_CLASS[name]
         mask = class_idx_fake == c
+        snr = get_snr(name, int(mask.sum()))
         X_fake_scaled[mask] = whitened_snr_scaling(
             X_fake[mask], snr, srate=int(args.sample_rate)) / snr_unit_correction
-        print(f"  fake  [{name}]: {mask.sum()} samples -> SNR {snr}")
+        snr_desc = f"{snr}" if args.snr_mode == "fixed" else f"mean={np.mean(snr):.1f}"
+        print(f"  fake  [{name}]: {mask.sum()} samples -> SNR {snr_desc}")
 
     print(f"\nInjecting into independent {args.ifo} bilby noise realizations...")
     import bilby
@@ -167,6 +198,7 @@ def main():
         X_fake=X_fake_injected, y_fake_idx=class_idx_fake,
         label_order=np.array(label_order),
         mean_snr_per_class=np.array([MEAN_SNR_PER_CLASS[n] for n in label_order]),
+        snr_mode=args.snr_mode,
         seed=args.seed, generator_checkpoint=args.generator_checkpoint,
         ifo=args.ifo, sample_rate=args.sample_rate,
     )

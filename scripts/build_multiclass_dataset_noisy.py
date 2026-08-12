@@ -43,6 +43,7 @@ from classify_real_vs_generated import (
 )
 from glitchgan.utils import whitened_snr_scaling
 from prepare_holdout_split import balance, scale_rowwise
+from real_snr_distribution import load_real_snr_per_class, sample_snr
 
 
 def parse_args():
@@ -63,20 +64,41 @@ def parse_args():
                              "to the majority class's count in the real training pool.")
     parser.add_argument("--ifo", type=str, default="H1")
     parser.add_argument("--sample-rate", type=float, default=4096.0)
+    parser.add_argument("--snr-mode", type=str, default="sample", choices=["fixed", "sample"],
+                        help="'fixed' uses each class's single mean SNR (Table "
+                             "tab:injection_snr) for every sample. 'sample' draws each "
+                             "sample's own SNR independently from the empirical "
+                             "distribution of real per-class SNR values (--o3a-csv/"
+                             "--o3b-csv). Applied identically to real and fake samples "
+                             "either way.")
+    parser.add_argument("--o3a-csv", type=str,
+                        default="/home/tom.dooney/GravitySpy_datasets/data_o3a_high_confidence.csv",
+                        help="Only used when --snr-mode sample.")
+    parser.add_argument("--o3b-csv", type=str,
+                        default="/home/tom.dooney/GravitySpy_datasets/data_o3b_high_confidence.csv",
+                        help="Only used when --snr-mode sample.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-npz", type=str, required=True)
     return parser.parse_args()
 
 
-def snr_scale_by_class(X, y_idx, label_order, sample_rate, snr_unit_correction):
-    """Rescale each row of X to its class's mean SNR (whitened-frame formula,
-    corrected for bilby's unit-time-domain-variance noise convention)."""
+def get_snr(snr_mode, real_snr_per_class, name, n, rng):
+    if snr_mode == "fixed":
+        return MEAN_SNR_PER_CLASS[name]
+    return sample_snr(real_snr_per_class, name, n, rng)
+
+
+def snr_scale_by_class(X, y_idx, label_order, sample_rate, snr_unit_correction,
+                       snr_mode, real_snr_per_class, rng):
+    """Rescale each row of X to its class's SNR (fixed mean or per-sample empirical
+    draw, per snr_mode), using the whitened-frame formula corrected for bilby's
+    unit-time-domain-variance noise convention."""
     X_scaled = np.zeros_like(X, dtype=np.float32)
     for c, name in enumerate(label_order):
-        snr = MEAN_SNR_PER_CLASS[name]
         mask = y_idx == c
         if mask.sum() == 0:
             continue
+        snr = get_snr(snr_mode, real_snr_per_class, name, int(mask.sum()), rng)
         X_scaled[mask] = whitened_snr_scaling(
             X[mask], snr, srate=int(sample_rate)) / snr_unit_correction
     return X_scaled
@@ -123,21 +145,34 @@ def main():
 
     snr_unit_correction = np.sqrt(args.sample_rate / 2.0)
 
-    print("\nSNR-scaling and injecting the real train/val/test pools "
-         "(one noise realization per sample, before any balancing)...")
+    real_snr_per_class = None
+    if args.snr_mode == "sample":
+        print(f"\nLoading empirical per-class SNR distributions from "
+             f"{args.o3a_csv} / {args.o3b_csv}...")
+        real_snr_per_class = load_real_snr_per_class(args.o3a_csv, args.o3b_csv, label_order)
+        for name in label_order:
+            snrs = real_snr_per_class[name]
+            print(f"  [{name}] n_available={len(snrs)}  mean={snrs.mean():.1f}  "
+                 f"median={np.median(snrs):.1f}")
+
+    print(f"\nSNR-scaling (mode={args.snr_mode}) and injecting the real train/val/test "
+         f"pools (one noise realization per sample, before any balancing)...")
     import bilby
     ifo = bilby.gw.detector.get_empty_interferometer(args.ifo)  # PSD loaded once
 
     X_train_pool_scaled = snr_scale_by_class(
-        X_train_pool, y_train_pool, label_order, args.sample_rate, snr_unit_correction)
+        X_train_pool, y_train_pool, label_order, args.sample_rate, snr_unit_correction,
+        args.snr_mode, real_snr_per_class, rng)
     X_train_pool_injected = inject_batch(X_train_pool_scaled, ifo, args.sample_rate, rng)
 
     X_val_scaled = snr_scale_by_class(
-        X_val, y_val, label_order, args.sample_rate, snr_unit_correction)
+        X_val, y_val, label_order, args.sample_rate, snr_unit_correction,
+        args.snr_mode, real_snr_per_class, rng)
     X_val_injected = inject_batch(X_val_scaled, ifo, args.sample_rate, rng)
 
     X_test_scaled = snr_scale_by_class(
-        X_test, y_test, label_order, args.sample_rate, snr_unit_correction)
+        X_test, y_test, label_order, args.sample_rate, snr_unit_correction,
+        args.snr_mode, real_snr_per_class, rng)
     X_test_injected = inject_batch(X_test_scaled, ifo, args.sample_rate, rng)
 
     # --- Config 1: real, natural (imbalanced), noise-injected ---------------
@@ -164,8 +199,9 @@ def main():
             fake_c = generate_fake_samples_for_class(
                 generator, deficit, c, args.num_classes, args.noise_dim, rng)
             fake_c = scale_rowwise(fake_c)
+            snr = get_snr(args.snr_mode, real_snr_per_class, name, deficit, rng)
             fake_c = whitened_snr_scaling(
-                fake_c, MEAN_SNR_PER_CLASS[name], srate=int(args.sample_rate)
+                fake_c, snr, srate=int(args.sample_rate)
             ) / snr_unit_correction
             fake_c = inject_batch(fake_c, ifo, args.sample_rate, rng)
             aug_parts_X.append(fake_c)
@@ -184,8 +220,9 @@ def main():
         fake_c = generate_fake_samples_for_class(
             generator, target, c, args.num_classes, args.noise_dim, rng)
         fake_c = scale_rowwise(fake_c)
+        snr = get_snr(args.snr_mode, real_snr_per_class, name, target, rng)
         fake_c = whitened_snr_scaling(
-            fake_c, MEAN_SNR_PER_CLASS[name], srate=int(args.sample_rate)
+            fake_c, snr, srate=int(args.sample_rate)
         ) / snr_unit_correction
         fake_c = inject_batch(fake_c, ifo, args.sample_rate, rng)
         fake_only_parts_X.append(fake_c)
@@ -214,6 +251,7 @@ def main():
         X_test=X_test_injected, y_test=y_test,
         label_order=np.array(label_order), target_per_class=target,
         mean_snr_per_class=np.array([MEAN_SNR_PER_CLASS[n] for n in label_order]),
+        snr_mode=args.snr_mode,
         seed=args.seed, generator_checkpoint=args.generator_checkpoint,
         ifo=args.ifo, sample_rate=args.sample_rate,
     )
