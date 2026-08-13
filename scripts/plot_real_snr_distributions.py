@@ -17,9 +17,12 @@ import argparse
 import os
 
 os.environ.setdefault("MPLBACKEND", "Agg")
+if "/Library/TeX/texbin" not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = "/Library/TeX/texbin:" + os.environ.get("PATH", "")
 
 import matplotlib.pyplot as plt
 import numpy as np
+import scienceplots  # noqa: F401
 
 from real_snr_distribution import load_real_snr_per_class
 
@@ -84,22 +87,43 @@ def main():
     plt.close(fig)
     print(f"\nSaved: {fig_path}")
 
-    # --- Overlaid comparison, all classes on one axis -----------------------
-    fig, ax = plt.subplots(figsize=(9, 6))
-    colors = plt.cm.tab10(np.linspace(0, 1, len(LABEL_ORDER)))
-    for name, color in zip(LABEL_ORDER, colors):
-        s = snr_per_class[name]
-        log_s = np.log10(s)
-        ax.hist(log_s, bins=60, histtype="step", color=color, lw=1.5, label=name, density=True)
-    ax.set_xlabel("log10(SNR)", fontsize=12)
-    ax.set_ylabel("density", fontsize=12)
-    ax.set_title("Empirical per-class SNR distributions (log scale)", fontsize=12)
-    ax.legend(fontsize=9)
-    plt.tight_layout()
-    fig_path2 = os.path.join(args.out_dir, "snr_distributions_overlaid.pdf")
-    fig.savefig(fig_path2, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Saved: {fig_path2}")
+    # --- Overlaid comparison, all classes on one axis (log SNR, paper style) -
+    with plt.style.context(["science"]):
+        fig, ax = plt.subplots(figsize=(9, 6))
+        colors = plt.cm.tab10(np.linspace(0, 1, len(LABEL_ORDER)))
+        for name, color in zip(LABEL_ORDER, colors):
+            s = snr_per_class[name]
+            log_s = np.log10(s)
+            ax.hist(log_s, bins=60, histtype="step", color=color, lw=2.0,
+                    label=name.replace("_", " "), density=True)
+        ax.set_xlabel(r"$\log_{10}(\mathrm{SNR})$", fontsize=22)
+        ax.set_ylabel("Density", fontsize=22)
+        ax.tick_params(axis="both", labelsize=18)
+        ax.legend(fontsize=16)
+        plt.tight_layout()
+        fig_path2 = os.path.join(args.out_dir, "snr_distributions_overlaid.pdf")
+        fig.savefig(fig_path2, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved: {fig_path2}")
+
+    # --- Same comparison, linear SNR axis (reference only -- the heavy tails
+    #     make this much less readable than the log version above) ----------
+    with plt.style.context(["science"]):
+        fig, ax = plt.subplots(figsize=(9, 6))
+        colors = plt.cm.tab10(np.linspace(0, 1, len(LABEL_ORDER)))
+        for name, color in zip(LABEL_ORDER, colors):
+            s = snr_per_class[name]
+            ax.hist(s, bins=60, histtype="step", color=color, lw=2.0,
+                    label=name.replace("_", " "), density=True)
+        ax.set_xlabel("SNR", fontsize=22)
+        ax.set_ylabel("Density", fontsize=22)
+        ax.tick_params(axis="both", labelsize=18)
+        ax.legend(fontsize=16)
+        plt.tight_layout()
+        fig_path3 = os.path.join(args.out_dir, "snr_distributions_overlaid_linear.pdf")
+        fig.savefig(fig_path3, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved: {fig_path3}")
 
 
 if __name__ == "__main__":
