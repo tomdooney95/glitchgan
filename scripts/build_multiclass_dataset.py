@@ -66,8 +66,15 @@ def parse_args():
     parser.add_argument("--generator-checkpoint", type=str, required=True)
     parser.add_argument("--noise-dim", type=int, default=100)
     parser.add_argument("--num-classes", type=int, default=7)
-    parser.add_argument("--train-frac", type=float, default=0.7)
-    parser.add_argument("--val-frac", type=float, default=0.1)
+    parser.add_argument("--train-frac", type=float, default=0.7,
+                        help="Ignored if --train-samples-per-class is given.")
+    parser.add_argument("--val-frac", type=float, default=0.1,
+                        help="If --train-samples-per-class is given, applied to the "
+                             "REMAINDER after removing train samples, not the full pool.")
+    parser.add_argument("--train-samples-per-class", type=int, default=None,
+                        help="If given, overrides --train-frac: every class contributes "
+                             "exactly this many real training samples (balanced by "
+                             "construction) instead of a proportional fraction.")
     parser.add_argument("--target-per-class", type=int, default=None,
                         help="Per-class sample count for the real_balanced, "
                              "real_fake_augmented, and fake_only sets. Defaults to the "
@@ -82,6 +89,25 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-npz", type=str, required=True)
     return parser.parse_args()
+
+
+def undersample_train_split(y_idx, samples_per_class, val_frac, rng):
+    """Per-class: take exactly samples_per_class samples for train (the same
+    count for every class), then split the remainder into val/test using
+    val_frac of what's left. See build_multiclass_dataset_noisy.py's copy of
+    this function for the full rationale."""
+    train_idx, val_idx, test_idx = [], [], []
+    for c in np.unique(y_idx):
+        idx = rng.permutation(np.where(y_idx == c)[0])
+        if len(idx) < samples_per_class:
+            raise ValueError(f"Class {c} has only {len(idx)} samples, fewer than "
+                             f"--train-samples-per-class {samples_per_class}.")
+        train_idx.append(idx[:samples_per_class])
+        remainder = idx[samples_per_class:]
+        n_val = int(round(len(remainder) * val_frac))
+        val_idx.append(remainder[:n_val])
+        test_idx.append(remainder[n_val:])
+    return np.concatenate(train_idx), np.concatenate(val_idx), np.concatenate(test_idx)
 
 
 def main():
@@ -99,10 +125,17 @@ def main():
     label_order = list(d["label_order"])
     print(f"  Held-out real: {X_real.shape}")
 
-    print(f"\nSplitting {args.train_frac:.0%}/{args.val_frac:.0%}/"
-         f"{1 - args.train_frac - args.val_frac:.0%} stratified by class (seed={args.seed})...")
-    train_idx, val_idx, test_idx = stratified_train_val_test_split(
-        y_real_idx, args.train_frac, args.val_frac, rng)
+    if args.train_samples_per_class is not None:
+        print(f"\nUndersampling every class to exactly {args.train_samples_per_class} "
+             f"training samples (balanced by construction), splitting the remainder "
+             f"{args.val_frac:.0%}/{1 - args.val_frac:.0%} val/test (seed={args.seed})...")
+        train_idx, val_idx, test_idx = undersample_train_split(
+            y_real_idx, args.train_samples_per_class, args.val_frac, rng)
+    else:
+        print(f"\nSplitting {args.train_frac:.0%}/{args.val_frac:.0%}/"
+             f"{1 - args.train_frac - args.val_frac:.0%} stratified by class (seed={args.seed})...")
+        train_idx, val_idx, test_idx = stratified_train_val_test_split(
+            y_real_idx, args.train_frac, args.val_frac, rng)
 
     X_train_pool, y_train_pool = X_real[train_idx], y_real_idx[train_idx]
     X_val, y_val = X_real[val_idx], y_real_idx[val_idx]

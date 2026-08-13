@@ -57,8 +57,23 @@ def parse_args():
     parser.add_argument("--generator-checkpoint", type=str, required=True)
     parser.add_argument("--noise-dim", type=int, default=100)
     parser.add_argument("--num-classes", type=int, default=7)
-    parser.add_argument("--train-frac", type=float, default=0.7)
-    parser.add_argument("--val-frac", type=float, default=0.1)
+    parser.add_argument("--train-frac", type=float, default=0.7,
+                        help="Ignored if --train-samples-per-class is given. Proportional "
+                             "split -- each class contributes train_frac of its own count, "
+                             "so relative class imbalance is preserved in the training pool.")
+    parser.add_argument("--val-frac", type=float, default=0.1,
+                        help="If --train-samples-per-class is given, this is applied to "
+                             "the REMAINDER after removing the train samples (val_frac of "
+                             "what's left per class goes to val, the rest to test), rather "
+                             "than to the full pool.")
+    parser.add_argument("--train-samples-per-class", type=int, default=None,
+                        help="If given, overrides --train-frac: every class contributes "
+                             "exactly this many real training samples (undersampled to the "
+                             "minority class if you pick a count at or below the smallest "
+                             "class's holdout size), instead of a proportional fraction. "
+                             "Isolates 'small training set' from 'imbalanced training set' "
+                             "as separate variables -- the resulting real_natural is small "
+                             "AND balanced, rather than small AND imbalanced.")
     parser.add_argument("--target-per-class", type=int, default=None,
                         help="Same override as build_multiclass_dataset.py -- defaults "
                              "to the majority class's count in the real training pool.")
@@ -80,6 +95,27 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-npz", type=str, required=True)
     return parser.parse_args()
+
+
+def undersample_train_split(y_idx, samples_per_class, val_frac, rng):
+    """Per-class: take exactly samples_per_class samples for train (the same
+    count for every class, regardless of how many are naturally available),
+    then split the remainder into val/test using val_frac of what's left.
+    Unlike stratified_train_val_test_split, the resulting train set is
+    balanced by construction, not just a scaled-down version of the natural
+    class distribution."""
+    train_idx, val_idx, test_idx = [], [], []
+    for c in np.unique(y_idx):
+        idx = rng.permutation(np.where(y_idx == c)[0])
+        if len(idx) < samples_per_class:
+            raise ValueError(f"Class {c} has only {len(idx)} samples, fewer than "
+                             f"--train-samples-per-class {samples_per_class}.")
+        train_idx.append(idx[:samples_per_class])
+        remainder = idx[samples_per_class:]
+        n_val = int(round(len(remainder) * val_frac))
+        val_idx.append(remainder[:n_val])
+        test_idx.append(remainder[n_val:])
+    return np.concatenate(train_idx), np.concatenate(val_idx), np.concatenate(test_idx)
 
 
 def get_snr(snr_mode, real_snr_per_class, name, n, rng):
@@ -122,10 +158,17 @@ def main():
         if name not in MEAN_SNR_PER_CLASS:
             raise ValueError(f"No mean SNR entry for class '{name}'.")
 
-    print(f"\nSplitting {args.train_frac:.0%}/{args.val_frac:.0%}/"
-         f"{1 - args.train_frac - args.val_frac:.0%} stratified by class (seed={args.seed})...")
-    train_idx, val_idx, test_idx = stratified_train_val_test_split(
-        y_real_idx, args.train_frac, args.val_frac, rng)
+    if args.train_samples_per_class is not None:
+        print(f"\nUndersampling every class to exactly {args.train_samples_per_class} "
+             f"training samples (balanced by construction), splitting the remainder "
+             f"{args.val_frac:.0%}/{1 - args.val_frac:.0%} val/test (seed={args.seed})...")
+        train_idx, val_idx, test_idx = undersample_train_split(
+            y_real_idx, args.train_samples_per_class, args.val_frac, rng)
+    else:
+        print(f"\nSplitting {args.train_frac:.0%}/{args.val_frac:.0%}/"
+             f"{1 - args.train_frac - args.val_frac:.0%} stratified by class (seed={args.seed})...")
+        train_idx, val_idx, test_idx = stratified_train_val_test_split(
+            y_real_idx, args.train_frac, args.val_frac, rng)
 
     X_train_pool, y_train_pool = X_real[train_idx], y_real_idx[train_idx]
     X_val, y_val = X_real[val_idx], y_real_idx[val_idx]
@@ -253,6 +296,7 @@ def main():
         label_order=np.array(label_order), target_per_class=target,
         mean_snr_per_class=np.array([MEAN_SNR_PER_CLASS[n] for n in label_order]),
         snr_mode=args.snr_mode,
+        train_samples_per_class=args.train_samples_per_class if args.train_samples_per_class is not None else -1,
         seed=args.seed, generator_checkpoint=args.generator_checkpoint,
         ifo=args.ifo, sample_rate=args.sample_rate,
     )
