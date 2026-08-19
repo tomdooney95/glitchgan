@@ -2,7 +2,8 @@
 data/
 
 # Generated outputs
-evaluation_plots/
+evaluation_plots/*
+!evaluation_plots/umap_stability/
 plots/
 GAN_outputs*/
 
